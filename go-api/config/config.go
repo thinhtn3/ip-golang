@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
+	"github.com/supabase-community/supabase-go"
 )
 
 type Config struct {
@@ -15,6 +16,7 @@ type Config struct {
 }
 
 var AppConfig *Config
+var SupabaseClient *supabase.Client
 
 func Load() {
 	//Loads environment variables from .env file
@@ -34,7 +36,17 @@ func Load() {
 		log.Fatal("SUPABASE_URL and SUPABASE_ANON_KEY are required")
 	}
 
+	SupabaseClient = InitSupabase()
+
 	log.Println("Config loaded successfully")
+}
+
+func InitSupabase() *supabase.Client {
+	client, err := supabase.NewClient(AppConfig.SupabaseURL, AppConfig.SupabaseServiceKey, nil)
+	if err != nil {
+		log.Fatal("Failed to initialize Supabase client:", err)
+	}
+	return client
 }
 
 func getEnv(key, defaultValue string) string {
