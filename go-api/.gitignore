@@ -1,0 +1,47 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+go-api
+
+# Go test binary
+*.test
+
+# Go coverage
+*.out
+coverage.html
+
+# Go workspace file
+go.work
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Debug
+debug
+*.log
+
+# Compiled binary (your app name)
+main
+app
+server
+
+# Vendor directory (if not committing dependencies)
+# vendor/
+
+# Air live reload temp directory
+tmp/
