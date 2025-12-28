@@ -11,7 +11,10 @@ import (
 func main() {
 	//enable cors for localhost:5173
 	
-	config.Load()
+	
+	cfg := config.Load()
+	supabaseClient := config.InitSupabase(cfg.SupabaseURL, cfg.SupabaseAnonKey)
+	
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173"},
@@ -22,9 +25,15 @@ func main() {
 
 
 	user := router.Group("/user")
-	user.Use(middleware.AuthMiddleware())
+	user.Use(middleware.NewAuthMiddleware(supabaseClient).Handle())
 	{
 		user.POST("/profile", handlers.GetProfile)
+	}
+
+	chat := router.Group("/chat")
+	chat.Use(middleware.NewAuthMiddleware(supabaseClient).Handle())
+	{
+		chat.POST("/create", handlers.CreateChatSession)
 	}
 
 	//health check
@@ -32,5 +41,5 @@ func main() {
 		c.JSON(200, gin.H{"message": "OK"})
 	})
 
-	router.Run(":" + config.AppConfig.Port)
+	router.Run(":" + cfg.Port)
 }

@@ -1,7 +1,10 @@
 # Backend Flow
 
 ## Config
-Load all env keys to config package and function to initialize Supabase
+Load all env keys to config package and function to initialize Supabase.<br>
+Database is init at main.go and is to be passed to services when needed.<br>
+Dependency injection: connected to database when server starts, then passing that connection explicitly to the services that needs them.<br>
+
 
 ## Middlewares
 ### auth.go (Required for all protected routes)
@@ -18,3 +21,6 @@ question_id column: foreign key which checks against question_bank table to see 
 ### messages
 user_id column: foreign key that checks against auth.users table.<br>
 chat_session_id column: uuid column that is a foreign key and checks against chat sessions table. To be used to gather all messages and render.<br>
+
+## Services
+### chatService

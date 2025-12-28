@@ -15,17 +15,15 @@ type Config struct {
 	Port               string
 }
 
-var AppConfig *Config
-var SupabaseClient *supabase.Client
 
-func Load() {
+func Load() *Config {
 	//Loads environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("Warning: .env file not found, using environment variables")
 	}
 
-	AppConfig = &Config{
+	AppConfig := &Config{
 		SupabaseURL:        getEnv("SUPABASE_URL", ""),
 		SupabaseAnonKey:    getEnv("SUPABASE_ANON_KEY", ""),
 		SupabaseServiceKey: getEnv("SUPABASE_SERVICE_KEY", ""),
@@ -36,13 +34,11 @@ func Load() {
 		log.Fatal("SUPABASE_URL and SUPABASE_ANON_KEY are required")
 	}
 
-	SupabaseClient = InitSupabase()
-
-	log.Println("Config loaded successfully")
+	return AppConfig
 }
 
-func InitSupabase() *supabase.Client {
-	client, err := supabase.NewClient(AppConfig.SupabaseURL, AppConfig.SupabaseServiceKey, nil)
+func InitSupabase(url string, anonKey string) *supabase.Client {
+	client, err := supabase.NewClient(url, anonKey, nil)
 	if err != nil {
 		log.Fatal("Failed to initialize Supabase client:", err)
 	}
