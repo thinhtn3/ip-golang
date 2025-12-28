@@ -9,3 +9,8 @@ Receives access token from frontend via Auth Bearer Token, verify that token is 
 If validated, extract user info and pass onto next handler.
 Must be called every time a request is made to a protected route as each context is a new request context.
 Validates existing access token from client before making requests.
+
+## Models
+### chat_sessions
+user_id column: foreign key that checks auth.users table to see if user_id exists.
+question_id column: foreign key which checks against question_bank table to see if question exist
