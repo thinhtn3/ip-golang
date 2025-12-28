@@ -33,7 +33,7 @@ func main() {
 	chat := router.Group("/chat")
 	chat.Use(middleware.NewAuthMiddleware(supabaseClient).Handle())
 	{
-		chat.POST("/create", handlers.CreateChatSession)
+		chat.POST("/create", handlers.NewChatSessionHandler(supabaseClient).CreateSessionFromQuestion)
 	}
 
 	//health check

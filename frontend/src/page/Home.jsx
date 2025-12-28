@@ -37,7 +37,7 @@ export default function Home() {
     const sendQuestion = async (questionId) => {
         console.log(accessToken)
         const { data, error } = await axios.post('http://localhost:8080/chat/create', {
-            questionId: questionId
+            question_id: questionId
         }, {
             headers: {
                 Authorization: `Bearer ${accessToken}`,
