@@ -12,5 +12,9 @@ Validates existing access token from client before making requests.
 
 ## Models
 ### chat_sessions
-user_id column: foreign key that checks auth.users table to see if user_id exists.
-question_id column: foreign key which checks against question_bank table to see if question exist
+user_id column: foreign key that checks auth.users table to see if user_id exists.<br>
+question_id column: foreign key which checks against question_bank table to see if question exist.<br>
+
+### messages
+user_id column: foreign key that checks against auth.users table.<br>
+chat_session_id column: uuid column that is a foreign key and checks against chat sessions table. To be used to gather all messages and render.<br>
