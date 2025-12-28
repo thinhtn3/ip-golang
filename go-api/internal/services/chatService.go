@@ -21,7 +21,6 @@ func NewChatService(supabase *supabase.Client) *ChatService {
 // Handler function to create a new chat session
 func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) () {
 	//retrieve question name from question_bank table
-
 	chat := map[string]interface{}{
 		"user_id": userID,
 		"question_id": questionID,

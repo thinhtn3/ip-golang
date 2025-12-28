@@ -36,16 +36,17 @@ func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
 		return
 	}
 
+	//retrieve question id from requestx
 	req := ChatSessionRequest{}
 	err := c.ShouldBindJSON(&req);
 	if err != nil {
 		c.JSON(400, gin.H{"message": "Invalid request"})
 		return
 	}
-	log.Println("Question ID: ", req.QuestionID)
-	log.Println("User: ", user.User.ID)
+
+	//create chat session
 	chatService := services.NewChatService(h.supabase)
 	chatService.CreateSession(c.Request.Context(), user.User.ID, uuid.MustParse(req.QuestionID))
-	log.Println("Chat Service: ", chatService)
+
 	c.JSON(200, gin.H{"message": "Chat session created successfully", "user": user})
 }
