@@ -5,21 +5,34 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thinhtn3/ip-golang.git/config"
+	"github.com/supabase-community/supabase-go"
 )
 
+type AuthMiddleware struct {
+	supabase *supabase.Client
+}
 
-func AuthMiddleware() gin.HandlerFunc {
+func NewAuthMiddleware(supabase *supabase.Client) *AuthMiddleware {
+	return &AuthMiddleware{supabase: supabase}
+}
 
+func (m *AuthMiddleware) Handle() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Println("AuthMiddleware")
+		log.Println("AuthMiddlewar Starting")
 		// Get access token from header and trim
 		accessToken := c.GetHeader("Authorization")
 		accessToken = strings.TrimPrefix(accessToken, "Bearer ")
 	
 		// Verify token (Supabase)
-		user, err := config.SupabaseClient.Auth.WithToken(accessToken).GetUser()
-		if accessToken == "" || err != nil {
+		if accessToken == "" {
+			c.AbortWithStatus(401)
+			log.Println("Unauthorized: No access token")
+			return
+		}
+
+		user, err := m.supabase.Auth.WithToken(accessToken).GetUser()
+
+		if err != nil {
 			c.AbortWithStatus(401)
 			log.Println("Unauthorized: ", err)
 			return
@@ -27,6 +40,7 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// Store users in context for next handler and continue
 		c.Set("user", user)
+		log.Println("AuthMiddleware Completed")
 		c.Next()
 	}
 }
