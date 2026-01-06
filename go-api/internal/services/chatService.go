@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/supabase-community/supabase-go"
+	"github.com/thinhtn3/ip-golang.git/internal/models"
 )
 
 
@@ -19,7 +20,18 @@ func NewChatService(supabase *supabase.Client) *ChatService {
 }
 
 // Handler function to create a new chat session
-func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) () {
+func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*models.ChatSession, error) {
+	session, err := s.GetSession(c, userID, questionID)
+
+	if (err != nil) {
+		return nil, err
+	}
+
+	if (session != nil) {
+		log.Println("Found existing session", session.ID, session.QuestionID)
+		return session, nil
+	}
+
 	//retrieve question name from question_bank table
 	chat := map[string]interface{}{
 		"user_id": userID,
@@ -27,7 +39,7 @@ func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questio
 	}
 
 	//create chat session in supabase
-	_, _, err := s.supabase.
+	_, _, err = s.supabase.
 		From("chat_sessions").
 		Insert(chat, true, "", "", "").
 		Execute()
@@ -36,4 +48,27 @@ func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questio
 		log.Println("Error creating chat session: ", err)
 	}
 	log.Println("Chat session created successfully: ", chat)
+
+	created, err := s.GetSession(c, userID, questionID)
+	if (err != nil) {
+		return nil, err
+	}
+	log.Println("Found created session", created.ID, created.QuestionID)
+	return created, nil
+}
+
+func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*models.ChatSession, error) {
+	sessions := []models.ChatSession{}
+	//Return slice of rows which matches userId and questionId
+	_, err := s.supabase.From("chat_sessions").Select("*", "", false).Eq("user_id", userID.String()).Eq("question_id", questionID.String()).ExecuteTo(&sessions)
+	if (err != nil) {
+		return nil, err
+	}
+
+	if len(sessions) == 0 {
+		return nil, nil
+	}
+
+	return &sessions[0], nil
+
 }
