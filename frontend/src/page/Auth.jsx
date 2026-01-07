@@ -40,9 +40,6 @@ export default function Auth() {
         });
 
         if (error) throw error;
-
-        console.log("Signed up:", data.user);
-        // Note: User may need to verify email depending on your Supabase settings
         alert("Check your email for verification link!");
       }
     } catch (err) {

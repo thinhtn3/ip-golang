@@ -46,27 +46,18 @@ export default function Home() {
         if (error) {
             console.error('Error sending question:', error)
         }
+        const sessionId = data.session.id
+        navigate(`/chat/${sessionId}`)
     }
     const logout = async () => {
         const { error } = await supabase.auth.signOut()
         if (error) {
             console.error('Error logging out:', error)
         }
-        //create local storage item to store access token
-        localStorage.removeItem('accessToken')
-        //remove user from context
-        setUser(null)
-        //remove session from context
-        setSession(null)
-        //remove loading from context
-        setLoading(false)
-        //navigate to login page
-        navigate('/login')
     }
 
     return (
         <div>
-            <h1>Home</h1>
             {/* create logout button */}
             <button onClick={logout}>Logout</button>
             <div>
