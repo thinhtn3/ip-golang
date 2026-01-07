@@ -37,8 +37,8 @@ func Load() *Config {
 	return AppConfig
 }
 
-func InitSupabase(url string, anonKey string) *supabase.Client {
-	client, err := supabase.NewClient(url, anonKey, nil)
+func InitSupabase(url string, serviceKey string) *supabase.Client {
+	client, err := supabase.NewClient(url, serviceKey, nil)
 	if err != nil {
 		log.Fatal("Failed to initialize Supabase client:", err)
 	}

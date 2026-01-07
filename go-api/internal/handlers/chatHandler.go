@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"log"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/supabase-community/gotrue-go/types"
@@ -22,21 +20,21 @@ func NewChatSessionHandler(supabase *supabase.Client) *ChatSessionHandler {
 }
 
 func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
-	log.Println("CreateChatSession Starting")
+
 	rawUser, exists := c.Get("user")
-	if !exists {
+	if (!exists) {
 		c.JSON(401, gin.H{"message": "Unauthorized"})
 		return
 	}
 
-	// type assertion to get user id
+	// type assertion from supabase goauth types library
 	user, ok := rawUser.(*types.UserResponse)
 	if !ok {
 		c.JSON(500, gin.H{"message": "Internal server error"})
 		return
 	}
 
-	//retrieve question id from requestx
+	//retrieve question id from request
 	req := ChatSessionRequest{}
 	err := c.ShouldBindJSON(&req);
 	if err != nil {

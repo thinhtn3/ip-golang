@@ -13,7 +13,7 @@ func main() {
 	
 	
 	cfg := config.Load()
-	supabaseClient := config.InitSupabase(cfg.SupabaseURL, cfg.SupabaseAnonKey)
+	supabaseClient := config.InitSupabase(cfg.SupabaseURL, cfg.SupabaseServiceKey)
 	
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{
