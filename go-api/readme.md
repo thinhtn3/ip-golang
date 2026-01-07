@@ -3,12 +3,17 @@
 ## Creating chat flow
 Client sends post request to /chat/create with question_id and access token in the body request. <br>
 Access token is validated then request goes to chatHandler to extract question_id and user_id. <br>
-Call createSession from NewChatService. createSession maps the arguments to the corresponding column name. Then upsert into chat_sessions table.
+Call createSession from NewChatService. createSession maps the arguments to the corresponding column name. Then upsert into chat_sessions table.<br>
+Return chat session ID to handler which then returns to client with session ID and response 200.<br>
 
 ## Config
 Load all env keys to config package and function to initialize Supabase.<br>
 Database is init at main.go and is to be passed to services when needed.<br>
 Dependency injection: connected to database when server starts, then passing that connection explicitly to the services that needs them.<br>
+### Dependency Injection
+Creating a dependency (supabase client).<br>
+Inject depedency where needed e.g client, handler or service. <br>
+Normally create a struct with the dependency as data, then create an instance using the constructor. Finally pass in dependency in receiver (member) function where the dependency (supabase client) is needed.<br>
 
 
 ## Middlewares
