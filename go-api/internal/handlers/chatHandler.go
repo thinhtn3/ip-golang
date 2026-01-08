@@ -8,27 +8,29 @@ import (
 	"github.com/thinhtn3/ip-golang.git/internal/services"
 )
 
+// DEPENDENCY INJECTION //
+
 type ChatSessionHandler struct {
 	supabase *supabase.Client
 }
-
-// CREATING SESSIONS
-type ChatSessionRequest struct {
-	QuestionID string `json:"question_id"`
-}
-
+//constructor for ChatSessionHandler
 func NewChatSessionHandler(supabase *supabase.Client) *ChatSessionHandler {
 	return &ChatSessionHandler{supabase: supabase}
 }
 
-func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
 
+
+// HANDLER FUNCTION TO CREATE CHAT SESSION //
+type ChatSessionRequest struct {
+	QuestionID string `json:"question_id"`
+}
+
+func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
 	rawUser, exists := c.Get("user")
 	if (!exists) {
 		c.JSON(401, gin.H{"message": "Unauthorized"})
 		return
 	}
-
 	// type assertion from supabase goauth types library
 	user, ok := rawUser.(*types.UserResponse)
 	if !ok {
@@ -36,7 +38,7 @@ func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
 		return
 	}
 
-	//retrieve question id from request
+	//bind question id to request
 	req := ChatSessionRequest{}
 	err := c.ShouldBindJSON(&req);
 	if err != nil {
@@ -55,20 +57,18 @@ func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
 	c.JSON(200, gin.H{"message": "Chat session created successfully", "session": session})
 }
 
+// SENDING MESSAGES //
 type MessageRequest struct {
 	Message       string `json:"message"`
 	Role          string `json:"role"`
 }
-
-// SENDING MESSAGES
 func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
-	//Get user
+	//Get user from context
 	rawUser, exists := c.Get("user")
 	if (!exists) {
 		c.JSON(401, gin.H{"message": "Unauthorized"})
 		return
 	}
-
 	user, ok := rawUser.(*types.UserResponse)
 	if !ok {
 		c.JSON(500, gin.H{"message": "Internal server error"})
@@ -102,6 +102,5 @@ func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
 		}
 		return
 	}
-
 	c.JSON(200, gin.H{"message": "Succesfully sent", "chat": chat})
 }
