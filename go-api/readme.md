@@ -1,5 +1,9 @@
 # Backend Flow
 
+## Sending chat flow
+Client sends post request to /chat/session/:sessionId/message/ with message and role in body data, and accessToken (retrieved by SB from client) in auth headers. <br>
+
+
 ## Creating chat flow
 Client sends post request to /chat/create with question_id and access token in the body request. <br>
 Access token is validated then request goes to chatHandler to extract question_id and user_id. <br>
