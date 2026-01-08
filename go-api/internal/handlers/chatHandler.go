@@ -92,7 +92,16 @@ func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
 	}
 
 	chatService := services.NewChatService(h.supabase)
-	chatService.SendMessage(c, user.User.ID, sessionID, req.Message, req.Role);
+	chat, err := chatService.SendMessage(c, user.User.ID, sessionID, req.Message, req.Role);
+	if err != nil {
+		if err == services.ForbiddenError {
+			c.JSON(403, gin.H{"message": "Forbidden: User does not own session"})
+			return
+		} else {
+			c.JSON(500, gin.H{"message": "Internal server error"})
+		}
+		return
+	}
 
-	c.JSON(200, gin.H{"message": "Succesfully sent" + req.Message, "session_id": sessionID, "user_id": user.User.ID})
+	c.JSON(200, gin.H{"message": "Succesfully sent", "chat": chat})
 }

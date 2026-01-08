@@ -10,6 +10,9 @@ import (
 	"github.com/thinhtn3/ip-golang.git/internal/models"
 )
 
+// CONSTS
+var ForbiddenError = errors.New("Forbidden: User does not own session")
+var InternalServerError = errors.New("Internal server error")
 
 type ChatService struct {
 	supabase *supabase.Client
@@ -80,20 +83,20 @@ func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID
 func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID uuid.UUID, message string, role string) (*models.Message, error) {
 	// check userID owns sessionID
 	rows := []models.Row{}
+
 	_, err := s.supabase.
 		From("chat_sessions").
 		Select("*", "", false).
 		Eq("user_id", userID.String()).
 		Eq("id", sessionID.String()).
 		ExecuteTo(&rows)
-		
-	log.Println("userID: ", userID, "sessionID: ", sessionID)
+
 	if err != nil {
-		return nil, err
+		return nil, InternalServerError
 	}
 
 	if len(rows) == 0 {
-		return nil, errors.New("Forbidden")
+		return nil, ForbiddenError
 	}
 
 	//Turn chat into interface
