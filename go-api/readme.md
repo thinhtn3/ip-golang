@@ -2,7 +2,8 @@
 
 ## Sending chat flow
 Client sends post request to /chat/session/:sessionId/message/ with message and role in body data, and accessToken (retrieved by SB from client) in auth headers. <br>
-
+Access token goes through middleware and is validated before hitting SendMessage function in chatHandler. <br>
+Handler strips sessionID and userID and calls chatService. Service verifies session ownerships and if valid, insert new message to DB before returning message struct back to client. <br>
 
 ## Creating chat flow
 Client sends post request to /chat/create with question_id and access token in the body request. <br>
