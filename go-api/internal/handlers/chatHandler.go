@@ -7,12 +7,14 @@ import (
 	"github.com/supabase-community/supabase-go"
 	"github.com/thinhtn3/ip-golang.git/internal/services"
 )
-type ChatSessionRequest struct {
-	QuestionID string `json:"question_id"`
-}
 
 type ChatSessionHandler struct {
 	supabase *supabase.Client
+}
+
+// CREATING SESSIONS
+type ChatSessionRequest struct {
+	QuestionID string `json:"question_id"`
 }
 
 func NewChatSessionHandler(supabase *supabase.Client) *ChatSessionHandler {
@@ -44,7 +46,53 @@ func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
 
 	//create chat session
 	chatService := services.NewChatService(h.supabase)
-	chatService.CreateSession(c.Request.Context(), user.User.ID, uuid.MustParse(req.QuestionID))
+	session, err := chatService.CreateSession(c.Request.Context(), user.User.ID, uuid.MustParse(req.QuestionID))
+	if err != nil {
+		c.JSON(500, gin.H{"message": "Internal server error"})
+		return
+	}
 
-	c.JSON(200, gin.H{"message": "Chat session created successfully", "user": user})
+	c.JSON(200, gin.H{"message": "Chat session created successfully", "session": session})
+}
+
+type MessageRequest struct {
+	Message       string `json:"message"`
+	Role          string `json:"role"`
+}
+
+// SENDING MESSAGES
+func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
+	//Get user
+	rawUser, exists := c.Get("user")
+	if (!exists) {
+		c.JSON(401, gin.H{"message": "Unauthorized"})
+		return
+	}
+
+	user, ok := rawUser.(*types.UserResponse)
+	if !ok {
+		c.JSON(500, gin.H{"message": "Internal server error"})
+		return
+	}
+
+	//Parse sessionID string from URL
+	sessionIDStr := c.Param("sessionId")
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if err != nil {
+		c.JSON(400, gin.H{"message": "Invalid session ID format"})
+		return
+	}
+
+	//bind messages into request, which can be accessed as req.Message and req.Role
+	req := MessageRequest{}
+	err = c.ShouldBindJSON(&req)
+	if err != nil {
+		c.JSON(400, gin.H{"message": "Invalid request"})
+		return
+	}
+
+	chatService := services.NewChatService(h.supabase)
+	chatService.SendMessage(c, user.User.ID, sessionID, req.Message, req.Role);
+
+	c.JSON(200, gin.H{"message": "Succesfully sent" + req.Message, "session_id": sessionID, "user_id": user.User.ID})
 }

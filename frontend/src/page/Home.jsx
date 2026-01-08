@@ -1,4 +1,3 @@
-import { useAuth } from '../context/authProvider'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../config/supabase'
 import React, { useState, useEffect } from 'react';
@@ -10,17 +9,10 @@ export default function Home() {
     const navigate = useNavigate()
     const [questions, setQuestions] = useState([])
 
-    let accessToken;
     const getAccessToken = async () => {
-        const { data, error } = await supabase.auth.getSession()
-        if (error) {
-            console.error('Error getting session:', error)
-            navigate('/login')
-        }
-        accessToken = data.session?.access_token
-        return accessToken
+        const { data } = await supabase.auth.getSession()
+        return data.session?.access_token
     }
-    accessToken = getAccessToken()
 
     useEffect(() => {
         const fetchQuestions = async () => {
@@ -35,7 +27,7 @@ export default function Home() {
     }, [])
 
     const sendQuestion = async (questionId) => {
-        console.log(accessToken)
+        const accessToken = await getAccessToken()
         const { data, error } = await axios.post('http://localhost:8080/chat/create', {
             question_id: questionId
         }, {
@@ -49,6 +41,7 @@ export default function Home() {
         const sessionId = data.session.id
         navigate(`/chat/${sessionId}`)
     }
+
     const logout = async () => {
         const { error } = await supabase.auth.signOut()
         if (error) {

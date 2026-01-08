@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"github.com/google/uuid"
@@ -57,6 +58,7 @@ func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questio
 	return created, nil
 }
 
+//Initial fetch of session
 func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*models.ChatSession, error) {
 	sessions := []models.ChatSession{}
 	//Return slice of rows which matches userId and questionId
@@ -71,4 +73,39 @@ func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID
 
 	return &sessions[0], nil
 
+}
+
+// SENDING MESSAGES
+
+func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID uuid.UUID, message string, role string) (*models.Message, error) {
+	// check userID owns sessionID
+	rows := []models.Row{}
+	_, err := s.supabase.
+		From("chat_sessions").
+		Select("*", "", false).
+		Eq("user_id", userID.String()).
+		Eq("id", sessionID.String()).
+		ExecuteTo(&rows)
+		
+	log.Println("userID: ", userID, "sessionID: ", sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(rows) == 0 {
+		return nil, errors.New("Forbidden")
+	}
+
+	//Turn chat into interface
+	chat := models.Message{
+		ID: uuid.New(),
+		UserID: userID,
+		ChatSessionID: sessionID,
+		Role: role,
+		Message: message,
+	}
+
+	s.supabase.From("messages").Insert(chat, false, "", "", "").Execute()
+
+	return &chat, nil
 }

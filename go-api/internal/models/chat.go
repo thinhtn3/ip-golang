@@ -33,3 +33,8 @@ type Message struct {
 	Role          string `json:"role"`
 	Message       string `json:"message"`
 }
+
+// Verifying session ownership
+type Row struct {
+	ID uuid.UUID `json:"id"`
+}

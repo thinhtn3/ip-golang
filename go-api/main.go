@@ -34,6 +34,7 @@ func main() {
 	chat.Use(middleware.NewAuthMiddleware(supabaseClient).Handle())
 	{
 		chat.POST("/create", handlers.NewChatSessionHandler(supabaseClient).CreateSessionFromQuestion)
+		chat.POST("/sessions/:sessionId/messages", handlers.NewChatSessionHandler(supabaseClient).SendMessage)
 	}
 
 	//health check
