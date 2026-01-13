@@ -19,7 +19,6 @@ func NewChatSessionHandler(supabase *supabase.Client) *ChatSessionHandler {
 }
 
 
-
 // HANDLER FUNCTION TO CREATE CHAT SESSION //
 type ChatSessionRequest struct {
 	QuestionID string `json:"question_id"`
@@ -103,4 +102,36 @@ func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"message": "Succesfully sent", "chat": chat})
+}
+
+// GET MESSAGES //
+func (h *ChatSessionHandler) GetMessages(c *gin.Context) {
+	rawUser, exists := c.Get("user")
+	if (!exists) {
+		c.JSON(401, gin.H{"message": "Unauthorized"})
+		return
+	}
+	user, ok := rawUser.(*types.UserResponse)
+	if !ok {
+		c.JSON(500, gin.H{"message": "Internal server error"})
+		return
+	}
+
+	sessionIDStr := c.Param("sessionId")
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if (err != nil) {
+		c.JSON(400, gin.H{"message": "Invalid session ID format"})
+	}
+	chatService := services.NewChatService(h.supabase)
+	messages, err := chatService.GetMessages(c.Request.Context(), user.User.ID, sessionID)
+	if err != nil {
+		if err == services.ForbiddenError {
+			c.JSON(403, gin.H{"message": "Forbidden: User does not own session"})
+			return
+		} else {
+			c.JSON(500, gin.H{"message": "Internal server error"})
+		}
+		return
+}
+	c.JSON(200, gin.H{"message": "Successfully retrieved messages", "messages": messages})
 }

@@ -86,21 +86,9 @@ func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID
 // SENDING MESSAGES //
 func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID uuid.UUID, message string, role string) (*models.Message, error) {
 	//check userID owns sessionID
-	rows := []models.Row{}
-	_, err := s.supabase.
-		From("chat_sessions").
-		Select("*", "", false).
-		Eq("user_id", userID.String()).
-		Eq("id", sessionID.String()).
-		ExecuteTo(&rows)
-
-	if err != nil {
-		return nil, InternalServerError
-	}
-
-	//Unauthorized user error
-	if len(rows) == 0 {
-		return nil, ForbiddenError
+	err := s.VerifySessionOwnership(&c, userID, sessionID)
+	if (err != nil) {
+		return nil, err
 	}
 
 	chat := models.Message{
@@ -112,4 +100,36 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 	}
 	s.supabase.From("messages").Insert(chat, false, "", "", "").Execute()
 	return &chat, nil
+}
+
+// GET MESSAGES //
+func (s *ChatService) GetMessages(c context.Context, userID uuid.UUID, sessionID uuid.UUID) ([]models.Message, error) {
+	err := s.VerifySessionOwnership(&c, userID, sessionID)
+	if (err != nil) {
+		return nil, err
+	}
+	
+	chatMessages := []models.Message{}
+	_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).ExecuteTo(&chatMessages)
+	if (err != nil) {
+		return nil, err
+	}
+	return chatMessages, nil
+}
+
+func (s *ChatService) VerifySessionOwnership(c *context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
+	rows := []models.Row{}
+	_, err := s.supabase.
+		From("chat_sessions").
+		Select("*", "", false).
+		Eq("user_id", userID.String()).
+		Eq("id", sessionID.String()).
+		ExecuteTo(&rows)
+	if (err != nil) {
+		return InternalServerError
+	}
+	if len(rows) == 0 {
+		return ForbiddenError
+	}
+	return nil //no error, session is owned by user
 }
