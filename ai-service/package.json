@@ -4,12 +4,15 @@
   "description": "microservice in js",
   "license": "ISC",
   "author": "",
-  "type": "commonjs",
+  "type": "module",
   "main": "index.js",
   "scripts": {
+    "dev": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@langchain/core": "^1.1.12",
+    "@langchain/google-genai": "^2.1.7",
     "@langchain/openai": "^1.2.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
