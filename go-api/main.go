@@ -6,6 +6,7 @@ import (
 	"github.com/thinhtn3/ip-golang.git/config"
 	"github.com/thinhtn3/ip-golang.git/internal/handlers"
 	"github.com/thinhtn3/ip-golang.git/internal/middleware"
+	"github.com/thinhtn3/ip-golang.git/internal/services"
 )
 
 func main() {
@@ -13,8 +14,12 @@ func main() {
 	
 	
 	cfg := config.Load()
+	//init client and service layer for dependency injectionwhy
 	supabaseClient := config.InitSupabase(cfg.SupabaseURL, cfg.SupabaseServiceKey)
-	
+	chatService := services.NewChatService(supabaseClient)
+	chatHandler := handlers.NewChatSessionHandler(chatService)
+
+
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173"},
@@ -33,9 +38,9 @@ func main() {
 	chat := router.Group("/chat")
 	chat.Use(middleware.NewAuthMiddleware(supabaseClient).Handle())
 	{
-		chat.POST("/create", handlers.NewChatSessionHandler(supabaseClient).CreateSessionFromQuestion)
-		chat.POST("/sessions/:sessionId/messages", handlers.NewChatSessionHandler(supabaseClient).SendMessage)
-		chat.GET("/sessions/:sessionId/messages", handlers.NewChatSessionHandler(supabaseClient).GetMessages)
+		chat.POST("/create", chatHandler.CreateSessionFromQuestion)
+		chat.POST("/sessions/:sessionId/messages", chatHandler.SendMessage)
+		chat.GET("/sessions/:sessionId/messages", chatHandler.GetMessages)
 	}
 
 	//health check

@@ -4,18 +4,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/supabase-community/gotrue-go/types"
-	"github.com/supabase-community/supabase-go"
 	"github.com/thinhtn3/ip-golang.git/internal/services"
 )
 
-// DEPENDENCY INJECTION //
 
 type ChatSessionHandler struct {
-	supabase *supabase.Client
+	chatService *services.ChatService
 }
+
 //constructor for ChatSessionHandler
-func NewChatSessionHandler(supabase *supabase.Client) *ChatSessionHandler {
-	return &ChatSessionHandler{supabase: supabase}
+func NewChatSessionHandler(chatService *services.ChatService) *ChatSessionHandler {
+	return &ChatSessionHandler{chatService: chatService}
 }
 
 
@@ -46,8 +45,7 @@ func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
 	}
 
 	//create chat session
-	chatService := services.NewChatService(h.supabase)
-	session, err := chatService.CreateSession(c.Request.Context(), user.User.ID, uuid.MustParse(req.QuestionID))
+	session, err := h.chatService.CreateSession(c.Request.Context(), user.User.ID, uuid.MustParse(req.QuestionID))
 	if err != nil {
 		c.JSON(500, gin.H{"message": "Internal server error"})
 		return
@@ -90,8 +88,7 @@ func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
-	chatService := services.NewChatService(h.supabase)
-	chat, err := chatService.SendMessage(c, user.User.ID, sessionID, req.Message, req.Role);
+	chat, err := h.chatService.SendMessage(c, user.User.ID, sessionID, req.Message, req.Role);
 	if err != nil {
 		if err == services.ForbiddenError {
 			c.JSON(403, gin.H{"message": "Forbidden: User does not own session"})
@@ -122,8 +119,8 @@ func (h *ChatSessionHandler) GetMessages(c *gin.Context) {
 	if (err != nil) {
 		c.JSON(400, gin.H{"message": "Invalid session ID format"})
 	}
-	chatService := services.NewChatService(h.supabase)
-	messages, err := chatService.GetMessages(c.Request.Context(), user.User.ID, sessionID)
+
+	messages, err := h.chatService.GetMessages(c.Request.Context(), user.User.ID, sessionID)
 	if err != nil {
 		if err == services.ForbiddenError {
 			c.JSON(403, gin.H{"message": "Forbidden: User does not own session"})
