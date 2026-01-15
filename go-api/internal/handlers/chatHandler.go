@@ -101,7 +101,7 @@ func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
 	c.JSON(200, gin.H{"message": "Succesfully sent", "chat": chat})
 }
 
-// GET MESSAGES //
+// GET MESSAGES INITIAL LOAD//
 func (h *ChatSessionHandler) GetMessages(c *gin.Context) {
 	rawUser, exists := c.Get("user")
 	if (!exists) {
@@ -120,7 +120,7 @@ func (h *ChatSessionHandler) GetMessages(c *gin.Context) {
 		c.JSON(400, gin.H{"message": "Invalid session ID format"})
 	}
 
-	messages, err := h.chatService.GetMessages(c.Request.Context(), user.User.ID, sessionID)
+	messages, err := h.chatService.GetMessages(c.Request.Context(), user.User.ID, sessionID, 0)
 	if err != nil {
 		if err == services.ForbiddenError {
 			c.JSON(403, gin.H{"message": "Forbidden: User does not own session"})

@@ -1,7 +1,9 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -92,40 +94,59 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 		return nil, err
 	}
 
-	chat := models.Message{
+	userMessage := models.Message{
 		ID: uuid.New(),
 		UserID: userID,
 		ChatSessionID: sessionID,
-		Role: role,
+		Role: "user",
 		Message: message,
 	}
 
-	resp, e := http.Post("http://localhost:3000/generate", "application/json", nil)
 
-	if (e != nil) {
+	//User request is the last 10 messages in the chat session for langchain
+	userRequest, err := s.GetMessages(c, userID, sessionID, 10)
+	if (err != nil) {
+		return nil, err
+	}
+
+	//Request body is a map with key "body" and value is the user's past 10 messages
+	requestBody := map[string][]models.Message{
+		"body": userRequest,
+	}
+	body, err := json.Marshal(requestBody)
+
+	resp, err := http.Post("http://localhost:3000/generate", "application/json", bytes.NewBuffer(body))
+
+	if (err != nil) {
 		log.Println("Error calling AI service: ", err)
 	}
 
 	defer resp.Body.Close()
 
-	s.supabase.From("messages").Insert(chat, false, "", "", "").Execute()
-	return &chat, nil
+	s.supabase.From("messages").Insert(userMessage, false, "", "", "").Execute()
+	return &userMessage, nil
 }
 
 // GET MESSAGES //
-func (s *ChatService) GetMessages(c context.Context, userID uuid.UUID, sessionID uuid.UUID) ([]models.Message, error) {
+func (s *ChatService) GetMessages(c context.Context, userID uuid.UUID, sessionID uuid.UUID, limit int) ([]models.Message, error) {
 	err := s.VerifySessionOwnership(&c, userID, sessionID)
 	if (err != nil) {
 		return nil, err
 	}
 	
 	chatMessages := []models.Message{}
-	_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).ExecuteTo(&chatMessages)
+	if limit > 0 {
+		_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).Limit(limit, "").ExecuteTo(&chatMessages)
+	} else {
+		_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).ExecuteTo(&chatMessages)
+	}
+
 	if (err != nil) {
 		return nil, err
 	}
 	return chatMessages, nil
 }
+
 
 func (s *ChatService) VerifySessionOwnership(c *context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
 	rows := []models.Row{}
@@ -143,3 +164,4 @@ func (s *ChatService) VerifySessionOwnership(c *context.Context, userID uuid.UUI
 	}
 	return nil //no error, session is owned by user
 }
+
