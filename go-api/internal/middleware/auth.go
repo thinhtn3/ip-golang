@@ -23,13 +23,14 @@ func (m *AuthMiddleware) Handle() gin.HandlerFunc {
 		accessToken := c.GetHeader("Authorization")
 		accessToken = strings.TrimPrefix(accessToken, "Bearer ")
 	
-		// Verify token (Supabase)
 		if accessToken == "" {
 			c.AbortWithStatus(401)
 			log.Println("Unauthorized: No access token")
 			return
 		}
 
+		// Verify token (Supabase)
+		// Extract user info and pass onto next handler.
 		user, err := m.supabase.Auth.WithToken(accessToken).GetUser()
 
 		if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -98,6 +99,15 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 		Role: role,
 		Message: message,
 	}
+
+	resp, e := http.Post("http://localhost:3000/generate", "application/json", nil)
+
+	if (e != nil) {
+		log.Println("Error calling AI service: ", err)
+	}
+
+	defer resp.Body.Close()
+
 	s.supabase.From("messages").Insert(chat, false, "", "", "").Execute()
 	return &chat, nil
 }

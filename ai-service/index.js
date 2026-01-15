@@ -8,11 +8,13 @@ const app = express();
 app.use(express.json());
 
 app.post("/generate", async (req, res) => {
-    const { prompt } = req.body;
-    const response = await gemini.invoke(prompt);
-    res.json({ response });
+    console.log("server says hello");
+    res.json({ message: "Hello from AI service" }, 200);
+    // const { prompt } = req.body;
+    // const response = await gemini.invoke(prompt);
+    // res.json({ response });
 });
 
-app.listen(process.env.PORT, () => {
+app.listen(process.env.PORT || 3000, () => {
     console.log(`Server is running on port ${process.env.PORT}`);
 });
