@@ -142,4 +142,9 @@ const interviewerPrompt = ChatPromptTemplate.fromMessages([
     ["user", "{input}"],
 ]);
 
-export default interviewerPrompt;
+const summaryPrompt = ChatPromptTemplate.fromMessages([
+    ["system", testInstructions],
+    ["user", "Summarize the following conversation: {summary} and the following messages: {messages}"],
+]);
+
+export { interviewerPrompt, summaryPrompt };

@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import interviewerPrompt from "./instruction.js";
+import { interviewerPrompt } from "./instruction.js";
 
 class Gemini {
     constructor() {

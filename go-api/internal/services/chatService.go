@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"slices"
@@ -25,12 +26,12 @@ type ChatService struct {
 	supabase *supabase.Client
 }
 
-//constructor for ChatService
+// CONSTRUCTOR //
 func NewChatService(supabase *supabase.Client) *ChatService {
 	return &ChatService{supabase: supabase}
 }
 
-//receiver function to create chat session
+// CREATE SESSION //
 func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*models.ChatSession, error) {
 	session, err := s.GetSession(c, userID, questionID)
 
@@ -48,6 +49,7 @@ func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questio
 		QuestionID: questionID,
 		QuestionName: "", //TODO: Get question name from question_bank table
 		CreatedAt: time.Now().UTC(),
+		Archived: false,
 	}
 
 	//insert chat session into supabase
@@ -75,7 +77,13 @@ func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questio
 func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*models.ChatSession, error) {
 	sessions := []models.ChatSession{}
 	//Return slice of rows which matches userId and questionId (because executeTo returns a slice of rows)
-	_, err := s.supabase.From("chat_sessions").Select("*", "", false).Eq("user_id", userID.String()).Eq("question_id", questionID.String()).ExecuteTo(&sessions)
+	_, err := s.supabase.
+		From("chat_sessions").
+		Select("*", "", false).
+		Eq("user_id", userID.String()).
+		Eq("archived", "false").
+		Eq("question_id", questionID.String()).
+		ExecuteTo(&sessions)
 	if (err != nil) {
 		return nil, err
 	}
@@ -107,30 +115,30 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 	s.supabase.From("messages").Insert(userMessage, false, "", "", "").Execute()
 
 
-	//User request is the last 10 messages in the chat session for langchain
-	userRequest, err := s.GetMessages(c, userID, sessionID, 10)
-	if (err != nil) {
-		return nil, err
-	}
-	//Request body is a map with key "body" and value is the user's past 10 messages
-	requestBody := map[string][]models.Message{
-		"body": userRequest,
-	}
-	body, err := json.Marshal(requestBody)
-	resp, err := http.Post("http://localhost:3000/generate", "application/json", bytes.NewBuffer(body))
-	if (err != nil) {
-		log.Println("Error calling AI service: ", err)
-	}
+	// //User request is the last 10 messages in the chat session for langchain
+	// userRequest, err := s.GetMessages(c, userID, sessionID, 10)
+	// if (err != nil) {
+	// 	return nil, err
+	// }
+	// //Request body is a map with key "body" and value is the user's past 10 messages
+	// requestBody := map[string][]models.Message{
+	// 	"body": userRequest,
+	// }
+	// body, err := json.Marshal(requestBody)
+	// resp, err := http.Post("http://localhost:3000/generate", "application/json", bytes.NewBuffer(body))
+	// if (err != nil) {
+	// 	log.Println("Error calling AI service: ", err)
+	// }
 
 	//read string response from post request body
 	var aiResponse struct {
 		Content string `json:"content"`
 		Role string `json:"role"`
 	}
-	err = json.NewDecoder(resp.Body).Decode(&aiResponse)
-	if (err != nil) {
-		log.Println("Error decoding AI response: ", err)
-	}
+	// err = json.NewDecoder(resp.Body).Decode(&aiResponse)
+	// if (err != nil) {
+	// 	log.Println("Error decoding AI response: ", err)
+	// }
 	//insert AI response into database
 	aiMessage := models.Message{
 		ID: uuid.New(),
@@ -142,7 +150,13 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 	}
 	s.supabase.From("messages").Insert(aiMessage, false, "", "", "").Execute()
 
-	defer resp.Body.Close()
+	// Every 10th message, create a summary
+	messages, _ := s.GetMessages(c, userID, sessionID, 0) // Get all messages
+	if len(messages)%10 == 0 && len(messages) > 0 {
+		fmt.Println("Summarizing conversation")
+    	s.SummarizeConversation(c, userID, sessionID)
+	}
+	// defer resp.Body.Close()
 
 	return &userMessage, nil
 }
@@ -170,7 +184,7 @@ func (s *ChatService) GetMessages(c context.Context, userID uuid.UUID, sessionID
 	return chatMessages, nil
 }
 
-
+// VERIFY SESSION OWNERSHIP //
 func (s *ChatService) VerifySessionOwnership(c *context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
 	rows := []models.Row{}
 	_, err := s.supabase.
@@ -188,3 +202,65 @@ func (s *ChatService) VerifySessionOwnership(c *context.Context, userID uuid.UUI
 	return nil //no error, session is owned by user
 }
 
+// SUMMARIZE CONVERSATION //
+func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
+	summary := models.ConversationSummary{}
+	summaries := []models.ConversationSummary{}
+	fmt.Println("Fetching summaries")
+	_, err := s.supabase.From("conversation_summaries").Select("*", "", false).Eq("chat_session_id", sessionID.String()).ExecuteTo(&summaries)
+	if (err != nil) {
+		fmt.Println("Error fetching summaries: ", err)
+		return err
+	}
+
+	if len(summaries) == 0 {
+		//create a new summary if no summary found
+		summary = models.ConversationSummary{
+			ID: uuid.New(),
+			ChatSessionID: sessionID,
+			Content: "",
+			UpdatedAt: time.Now().UTC(),
+			LastMessageID: uuid.New(),
+		}
+	}
+
+	var createdAt time.Time
+	lastMessage := []models.Message{}
+
+	if summary.LastMessageID != uuid.Nil {
+		// get the created_at of the last message
+		message := models.Message{}
+		_, err = s.supabase.From("messages").Select("*", "", false).Eq("id", summary.LastMessageID.String()).ExecuteTo(&lastMessage)
+		if (err != nil) {
+			fmt.Println("Error fetching message: ", err)
+			return err
+		}
+		createdAt = message.CreatedAt
+		fmt.Println("CreatedAt: ", createdAt)
+	}
+	fmt.Println("FOO BaR", createdAt)
+
+
+	// get the 10 messages after the created_at
+	messages := []models.Message{}
+	_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).Order("created_at", &postgrest.OrderOpts{Ascending: true}).Gte("created_at", createdAt.Format(time.RFC3339)).Limit(10, "").ExecuteTo(&messages)
+	if (err != nil) {
+		fmt.Println("Error fetching messages: ", err)
+		return err
+	}
+
+	// send summary and messages slice to localhost 300 summarize post
+	requestBody := map[string]interface{}{
+		"summary": summary.Content,
+		"messages": messages,
+	}
+	body, err := json.Marshal(requestBody)
+	resp, err := http.Post("http://localhost:3000/summarize", "application/json", bytes.NewBuffer(body))
+	fmt.Println("sending localhost 3000/summarize")
+	if (err != nil) {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}

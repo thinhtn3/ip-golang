@@ -13,6 +13,7 @@ type ChatSession struct {
 	QuestionID   uuid.UUID    `json:"question_id"`
 	QuestionName string    `json:"question_name"`
 	CreatedAt    time.Time `json:"created_at"`
+	Archived     bool       `json:"archived"`
 }
 
 // Question represents the question_bank table
@@ -33,6 +34,14 @@ type Message struct {
 	Role          string `json:"role"`
 	Message       string `json:"message"`
 	CreatedAt     time.Time `json:"created_at"`
+}
+
+type ConversationSummary struct {
+	ID uuid.UUID `json:"id"`
+	ChatSessionID uuid.UUID `json:"chat_session_id"`
+	Content string `json:"content"`
+	UpdatedAt time.Time `json:"updated_at"`
+	LastMessageID uuid.UUID `json:"last_message_id"`
 }
 
 // Verifying session ownership
