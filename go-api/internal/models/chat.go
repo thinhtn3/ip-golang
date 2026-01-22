@@ -32,6 +32,7 @@ type Message struct {
 	ChatSessionID uuid.UUID `json:"chat_session_id"`
 	Role          string `json:"role"`
 	Message       string `json:"message"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // Verifying session ownership

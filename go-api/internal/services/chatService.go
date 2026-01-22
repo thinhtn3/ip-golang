@@ -7,9 +7,11 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/supabase-community/postgrest-go"
 	"github.com/supabase-community/supabase-go"
 	"github.com/thinhtn3/ip-golang.git/internal/models"
 )
@@ -100,7 +102,9 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 		ChatSessionID: sessionID,
 		Role: "user",
 		Message: message,
+		CreatedAt: time.Now().UTC(),
 	}
+	s.supabase.From("messages").Insert(userMessage, false, "", "", "").Execute()
 
 
 	//User request is the last 10 messages in the chat session for langchain
@@ -108,22 +112,38 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 	if (err != nil) {
 		return nil, err
 	}
-
 	//Request body is a map with key "body" and value is the user's past 10 messages
 	requestBody := map[string][]models.Message{
 		"body": userRequest,
 	}
 	body, err := json.Marshal(requestBody)
-
 	resp, err := http.Post("http://localhost:3000/generate", "application/json", bytes.NewBuffer(body))
-
 	if (err != nil) {
 		log.Println("Error calling AI service: ", err)
 	}
 
+	//read string response from post request body
+	var aiResponse struct {
+		Content string `json:"content"`
+		Role string `json:"role"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&aiResponse)
+	if (err != nil) {
+		log.Println("Error decoding AI response: ", err)
+	}
+	//insert AI response into database
+	aiMessage := models.Message{
+		ID: uuid.New(),
+		UserID: userID,
+		ChatSessionID: sessionID,
+		Role: aiResponse.Role,
+		Message: aiResponse.Content,
+		CreatedAt: time.Now().UTC(),
+	}
+	s.supabase.From("messages").Insert(aiMessage, false, "", "", "").Execute()
+
 	defer resp.Body.Close()
 
-	s.supabase.From("messages").Insert(userMessage, false, "", "", "").Execute()
 	return &userMessage, nil
 }
 
@@ -136,8 +156,11 @@ func (s *ChatService) GetMessages(c context.Context, userID uuid.UUID, sessionID
 	
 	chatMessages := []models.Message{}
 	if limit > 0 {
-		_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).Limit(limit, "").ExecuteTo(&chatMessages)
+		//order by the most recent 10 in ascending order to get the most recent 10 messages (fetch message to send to langchain for context)
+		_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).Order("created_at", &postgrest.OrderOpts{Ascending: false}).Limit(limit, "").ExecuteTo(&chatMessages)
+		slices.Reverse(chatMessages) //reverse slice after ascending false so the latest message is at end
 	} else {
+		//fetch all messages for the chat session (initial load)
 		_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).ExecuteTo(&chatMessages)
 	}
 
