@@ -23,15 +23,6 @@ export default function Auth() {
         });
 
         if (error) throw error;
-        await axios.post(
-          "http://localhost:8080/user/profile", {},
-          {
-            headers: {
-              Authorization: `Bearer ${data.session.access_token}`,
-            },
-          }
-        );
-        console.log("Logged in:", data.user);
       } else {
         // Sign up with password
         const { data, error } = await supabase.auth.signUp({

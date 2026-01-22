@@ -63,7 +63,7 @@ export default function Chat() {
 
     return (
         <div>
-            {authorized ? <Chatbox sessionId={sessionId} messages={messages} setMessages={setMessages} handleSubmit={handleSubmit} /> : <div className="flex flex-col items-center justify-center h-screen">
+            {authorized ? <Chatbox sessionId={sessionId} messages={messages} setMessages={setMessages} handleSubmit={handleSubmit} setMessage={setMessage} message={message} /> : <div className="flex flex-col items-center justify-center h-screen">
                 <h1 className="text-2xl font-bold">Forbidden: User does not own session</h1>
                 <button className="mt-4 bg-blue-500 text-white px-4 py-2 rounded-md" onClick={() => navigate("/")}>Go to Home</button>
             </div>}
