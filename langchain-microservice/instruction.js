@@ -134,7 +134,7 @@ const instructions = `
 `;
 
 const testInstructions = `
-    Respond with I AM AI. Followed by the actual repsonse to user messages
+    For each response, respond with " - AI response" at the end of the response.
 `;
 
 const interviewerPrompt = ChatPromptTemplate.fromMessages([

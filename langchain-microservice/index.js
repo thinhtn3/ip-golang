@@ -30,9 +30,13 @@ app.post("/generate", async (req, res) => {
 app.post("/summarize", async (req, res) => {
     // get summary and messages array then send it to gemini for summarization
     const { summary, messages } = req.body;
-    console.log(summary, messages);
-    // const response = await gemini.invoke(summaryPrompt.invoke({ summary: summary, messages: messages }));
-    // res.json({ content: response.content });
+    if (!summary) {
+        console.log("Received no summary");
+    }
+    console.log(summary, "FOO", messages);
+    const response = await gemini.invoke(summaryPrompt, { summary: summary, messages: messages });
+    console.log("Response: ", response.content);
+    res.json({ content: response.content });
 })
 
 app.listen(process.env.PORT || 3000, () => {

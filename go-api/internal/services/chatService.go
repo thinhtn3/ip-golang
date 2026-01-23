@@ -206,6 +206,7 @@ func (s *ChatService) VerifySessionOwnership(c *context.Context, userID uuid.UUI
 func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
 	summary := models.ConversationSummary{}
 	summaries := []models.ConversationSummary{}
+
 	fmt.Println("Fetching summaries")
 	_, err := s.supabase.From("conversation_summaries").Select("*", "", false).Eq("chat_session_id", sessionID.String()).ExecuteTo(&summaries)
 	if (err != nil) {
@@ -218,30 +219,29 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 		summary = models.ConversationSummary{
 			ID: uuid.New(),
 			ChatSessionID: sessionID,
-			Content: "",
+			Content: "No summary found",
 			UpdatedAt: time.Now().UTC(),
-			LastMessageID: uuid.New(),
+			LastMessageID: uuid.Nil,
 		}
+	} else {
+		summary = summaries[0]
 	}
 
 	var createdAt time.Time
-	lastMessage := []models.Message{}
+	lastMessages := []models.Message{}
 
 	if summary.LastMessageID != uuid.Nil {
-		// get the created_at of the last message
-		message := models.Message{}
-		_, err = s.supabase.From("messages").Select("*", "", false).Eq("id", summary.LastMessageID.String()).ExecuteTo(&lastMessage)
+		// If this is a new summary, get the first message and retrieve created_at Time to store
+		_, err = s.supabase.From("messages").Select("*", "", false).Eq("id", summary.LastMessageID.String()).ExecuteTo(&lastMessages)
 		if (err != nil) {
 			fmt.Println("Error fetching message: ", err)
 			return err
 		}
-		createdAt = message.CreatedAt
-		fmt.Println("CreatedAt: ", createdAt)
+		createdAt = lastMessages[0].CreatedAt
 	}
-	fmt.Println("FOO BaR", createdAt)
 
 
-	// get the 10 messages after the created_at
+	// get the 10 messages AFTER the createdAt time
 	messages := []models.Message{}
 	_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).Order("created_at", &postgrest.OrderOpts{Ascending: true}).Gte("created_at", createdAt.Format(time.RFC3339)).Limit(10, "").ExecuteTo(&messages)
 	if (err != nil) {
@@ -254,12 +254,35 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 		"summary": summary.Content,
 		"messages": messages,
 	}
+
 	body, err := json.Marshal(requestBody)
 	resp, err := http.Post("http://localhost:3000/summarize", "application/json", bytes.NewBuffer(body))
-	fmt.Println("sending localhost 3000/summarize")
 	if (err != nil) {
 		return err
 	}
+
+	var summaryResponse models.SummaryResponse
+	err = json.NewDecoder(resp.Body).Decode(&summaryResponse)
+	if (err != nil) {
+		fmt.Println("Error decoding summary response: ", err)
+		return err
+	}
+
+	fmt.Println("Response: ", summaryResponse.Content)
+
+	//update summary with new summary
+	summary.Content = summaryResponse.Content
+	summary.UpdatedAt = time.Now().UTC()
+	summary.LastMessageID = messages[len(messages)-1].ID
+	
+	// upsert summary into database
+	_, _, err = s.supabase.From("conversation_summaries").Upsert(summary, "", "", "").Eq("id", summary.ID.String()).Execute()
+	if (err != nil) {
+		fmt.Println("Error upserting summary: ", err)
+		return err
+	}
+	log.Println("Updated Summary: ", summary)
+
 	defer resp.Body.Close()
 
 	return nil

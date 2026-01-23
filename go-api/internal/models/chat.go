@@ -48,3 +48,7 @@ type ConversationSummary struct {
 type Row struct {
 	ID uuid.UUID `json:"id"`
 }
+
+type SummaryResponse struct {
+	Content string `json:"content"`
+}
