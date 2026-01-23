@@ -14,6 +14,7 @@ type ChatSession struct {
 	QuestionName string    `json:"question_name"`
 	CreatedAt    time.Time `json:"created_at"`
 	Archived     bool       `json:"archived"`
+	MessageCount int        `json:"message_count"`
 }
 
 // Question represents the question_bank table
