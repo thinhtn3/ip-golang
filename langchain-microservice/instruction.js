@@ -134,7 +134,7 @@ const instructions = `
 `;
 
 const testInstructions = `
-    Respond with I AM AI. Followed by the actual repsonse to user messages
+    For each response, respond with " - AI response" at the end of the response.
 `;
 
 const interviewerPrompt = ChatPromptTemplate.fromMessages([
@@ -142,4 +142,9 @@ const interviewerPrompt = ChatPromptTemplate.fromMessages([
     ["user", "{input}"],
 ]);
 
-export default interviewerPrompt;
+const summaryPrompt = ChatPromptTemplate.fromMessages([
+    ["system", testInstructions],
+    ["user", "Summarize the following conversation: {summary} and the following messages: {messages}"],
+]);
+
+export { interviewerPrompt, summaryPrompt };
