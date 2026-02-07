@@ -1,19 +1,21 @@
-package handlers
+package chat
 
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/supabase-community/gotrue-go/types"
-	"github.com/thinhtn3/ip-golang.git/internal/services"
+
+	chatDomain "github.com/thinhtn3/ip-golang.git/internal/domain/chat"
+	chatService "github.com/thinhtn3/ip-golang.git/internal/services/chat"
 )
 
 
 type ChatSessionHandler struct {
-	chatService *services.ChatService
+	chatService *chatService.ChatService
 }
 
 //constructor for ChatSessionHandler
-func NewChatSessionHandler(chatService *services.ChatService) *ChatSessionHandler {
+func NewChatSessionHandler(chatService *chatService.ChatService) *ChatSessionHandler {
 	return &ChatSessionHandler{chatService: chatService}
 }
 
@@ -90,7 +92,7 @@ func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
 
 	chat, err := h.chatService.SendMessage(c, user.User.ID, sessionID, req.Message, req.Role);
 	if err != nil {
-		if err == services.ForbiddenError {
+		if err == chatDomain.ErrForbidden {
 			c.JSON(403, gin.H{"message": "Forbidden: User does not own session"})
 			return
 		} else {
@@ -122,7 +124,7 @@ func (h *ChatSessionHandler) GetMessages(c *gin.Context) {
 
 	messages, err := h.chatService.GetMessages(c.Request.Context(), user.User.ID, sessionID, 0)
 	if err != nil {
-		if err == services.ForbiddenError {
+		if err == chatDomain.ErrForbidden {
 			c.JSON(403, gin.H{"message": "Forbidden: User does not own session"})
 			return
 		} else {

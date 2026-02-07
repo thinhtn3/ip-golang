@@ -1,38 +1,32 @@
-package services
+package chat
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"slices"
 	"time"
-
 	"github.com/google/uuid"
 	"github.com/supabase-community/postgrest-go"
+	chatDomain "github.com/thinhtn3/ip-golang.git/internal/domain/chat"
 	"github.com/supabase-community/supabase-go"
-	"github.com/thinhtn3/ip-golang.git/internal/models"
 )
 
-// CONSTS
-var ForbiddenError = errors.New("Forbidden: User does not own session")
-var InternalServerError = errors.New("Internal server error")
 
-// DEPENDENCY INJECTION //
+
 type ChatService struct {
 	supabase *supabase.Client
 }
 
-// CONSTRUCTOR //
 func NewChatService(supabase *supabase.Client) *ChatService {
 	return &ChatService{supabase: supabase}
 }
 
 // CREATE SESSION //
-func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*models.ChatSession, error) {
+func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*chatDomain.ChatSession, error) {
 	session, err := s.GetSession(c, userID, questionID)
 
 	if (err != nil) {
@@ -43,7 +37,7 @@ func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questio
 	}
 
 	//create chat session object
-	chat := models.ChatSession{
+	chat := chatDomain.ChatSession{
 		ID: uuid.New(),
 		UserID: userID,
 		QuestionID: questionID,
@@ -74,8 +68,8 @@ func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questio
 }
 
 // GET SESSION ID BY USER ID AND QUESTION ID //
-func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*models.ChatSession, error) {
-	sessions := []models.ChatSession{}
+func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*chatDomain.ChatSession, error) {
+	sessions := []chatDomain.ChatSession{}
 	//Return slice of rows which matches userId and questionId (because executeTo returns a slice of rows)
 	_, err := s.supabase.
 		From("chat_sessions").
@@ -97,14 +91,14 @@ func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID
 }
 
 // SENDING MESSAGES //
-func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID uuid.UUID, message string, role string) (*models.Message, error) {
+func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID uuid.UUID, message string, role string) (*chatDomain.Message, error) {
 	//check userID owns sessionID
 	err := s.VerifySessionOwnership(&c, userID, sessionID)
 	if (err != nil) {
 		return nil, err
 	}
 
-	userMessage := models.Message{
+	userMessage := chatDomain.Message{
 		ID: uuid.New(),
 		UserID: userID,
 		ChatSessionID: sessionID,
@@ -118,6 +112,7 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 		"session_id": sessionID.String(),
 	})
 
+	// TODO 1/22: Create post request to /generate endpoint with user request + summary for context
 	// //User request is the last 10 messages in the chat session for langchain
 	// userRequest, err := s.GetMessages(c, userID, sessionID, 10)
 	// if (err != nil) {
@@ -143,7 +138,7 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 	// 	log.Println("Error decoding AI response: ", err)
 	// }
 	//insert AI response into database
-	aiMessage := models.Message{
+	aiMessage := chatDomain.Message{
 		ID: uuid.New(),
 		UserID: userID,
 		ChatSessionID: sessionID,
@@ -158,7 +153,7 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 
 	// Check if message count is a multiple of 10, if so, summarize conversation
 	fmt.Println("Before count")
-	session := []models.ChatSession{}
+	session := []chatDomain.ChatSession{}
 	_, err = s.supabase.From("chat_sessions").Select("message_count", "", false).Eq("id", sessionID.String()).ExecuteTo(&session)
 	if (err != nil) {
 		return nil, err
@@ -173,13 +168,13 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 }
 
 // GET MESSAGES //
-func (s *ChatService) GetMessages(c context.Context, userID uuid.UUID, sessionID uuid.UUID, limit int) ([]models.Message, error) {
+func (s *ChatService) GetMessages(c context.Context, userID uuid.UUID, sessionID uuid.UUID, limit int) ([]chatDomain.Message, error) {
 	err := s.VerifySessionOwnership(&c, userID, sessionID)
 	if (err != nil) {
 		return nil, err
 	}
 	
-	chatMessages := []models.Message{}
+	chatMessages := []chatDomain.Message{}
 	if limit > 0 {
 		//order by the most recent 10 in ascending order to get the most recent 10 messages (fetch message to send to langchain for context)
 		_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).Order("created_at", &postgrest.OrderOpts{Ascending: false}).Limit(limit, "").ExecuteTo(&chatMessages)
@@ -195,9 +190,12 @@ func (s *ChatService) GetMessages(c context.Context, userID uuid.UUID, sessionID
 	return chatMessages, nil
 }
 
-// VERIFY SESSION OWNERSHIP //
+// VERIFY SESSION OWNERSHIP
 func (s *ChatService) VerifySessionOwnership(c *context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
-	rows := []models.Row{}
+	type Row struct {
+		ID uuid.UUID `json:"id"`
+	}
+	rows := []Row{}
 	_, err := s.supabase.
 		From("chat_sessions").
 		Select("*", "", false).
@@ -205,16 +203,21 @@ func (s *ChatService) VerifySessionOwnership(c *context.Context, userID uuid.UUI
 		Eq("id", sessionID.String()).
 		ExecuteTo(&rows)
 	if (err != nil) {
-		return InternalServerError
+		return chatDomain.ErrInternalServerError
 	}
 	if len(rows) == 0 {
-		return ForbiddenError
+		//Session not found, return forbidden error
+		return chatDomain.ErrForbidden
 	}
-	return nil //no error, session is owned by user
+	return nil
 }
 
 // SUMMARIZE CONVERSATION //
-func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID, sessionID uuid.UUID) (*models.ConversationSummary, error) {
+func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID, sessionID uuid.UUID) (*chatDomain.ConversationSummary, error) {
+	type SummaryResponse struct {
+		Content string `json:"content"`
+	}
+
 	summary, err := s.GetSummary(c, userID, sessionID)
 	if (err != nil) {
 		return nil, err
@@ -222,7 +225,7 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 
 	// If no summary found, create a new one
 	if summary == nil {
-		summary = &models.ConversationSummary{
+		summary = &chatDomain.ConversationSummary{
 			ID: uuid.New(),
 			ChatSessionID: sessionID,
 			Content: "No summary found",
@@ -232,7 +235,7 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 	}
 
 	var createdAt time.Time
-	lastMessages := []models.Message{}
+	lastMessages := []chatDomain.Message{}
 
 	if summary.LastMessageID != uuid.Nil {
 		// If this is a new summary, get the first message and retrieve created_at Time to store
@@ -244,7 +247,7 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 	}
 
 	// get the 10 messages AFTER the createdAt time
-	messages := []models.Message{}
+	messages := []chatDomain.Message{}
 	_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).Order("created_at", &postgrest.OrderOpts{Ascending: true}).Gte("created_at", createdAt.Format(time.RFC3339)).Limit(10, "").ExecuteTo(&messages)
 	if (err != nil) {
 		return nil, err
@@ -262,14 +265,14 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 		return nil, err
 	}
 
-	var summaryResponse models.SummaryResponse
+	var summaryResponse SummaryResponse
 	err = json.NewDecoder(resp.Body).Decode(&summaryResponse)
 	if (err != nil) {
 		fmt.Println("Error decoding summary response: ", err)
 		return nil, err
 	}
 
-	//update summary with new summary
+	//update summary
 	summary.Content = summaryResponse.Content
 	summary.UpdatedAt = time.Now().UTC()
 	summary.LastMessageID = messages[len(messages)-1].ID
@@ -284,8 +287,8 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 	return summary, nil
 }
 
-func (s *ChatService) GetSummary(c context.Context, userID uuid.UUID, sessionID uuid.UUID) (*models.ConversationSummary, error) {
-	summaries := []models.ConversationSummary{}
+func (s *ChatService) GetSummary(c context.Context, userID uuid.UUID, sessionID uuid.UUID) (*chatDomain.ConversationSummary, error) {
+	summaries := []chatDomain.ConversationSummary{}
 	_, err := s.supabase.From("conversation_summaries").Select("*", "", false).Eq("chat_session_id", sessionID.String()).ExecuteTo(&summaries)
 	if (err != nil) {
 		return nil, err
