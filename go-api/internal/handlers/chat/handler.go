@@ -27,7 +27,7 @@ type ChatSessionRequest struct {
 
 func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
 	rawUser, exists := c.Get("user")
-	if (!exists) {
+	if !exists {
 		c.JSON(401, gin.H{"message": "Unauthorized"})
 		return
 	}
@@ -40,7 +40,7 @@ func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
 
 	//bind question id to request
 	req := ChatSessionRequest{}
-	err := c.ShouldBindJSON(&req);
+	err := c.ShouldBindJSON(&req)
 	if err != nil {
 		c.JSON(400, gin.H{"message": "Invalid request"})
 		return
@@ -64,7 +64,7 @@ type MessageRequest struct {
 func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
 	//Get user from context
 	rawUser, exists := c.Get("user")
-	if (!exists) {
+	if !exists {
 		c.JSON(401, gin.H{"message": "Unauthorized"})
 		return
 	}
@@ -106,7 +106,7 @@ func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
 // GET MESSAGES INITIAL LOAD//
 func (h *ChatSessionHandler) GetMessages(c *gin.Context) {
 	rawUser, exists := c.Get("user")
-	if (!exists) {
+	if !exists {
 		c.JSON(401, gin.H{"message": "Unauthorized"})
 		return
 	}
@@ -118,8 +118,9 @@ func (h *ChatSessionHandler) GetMessages(c *gin.Context) {
 
 	sessionIDStr := c.Param("sessionId")
 	sessionID, err := uuid.Parse(sessionIDStr)
-	if (err != nil) {
+	if err != nil {
 		c.JSON(400, gin.H{"message": "Invalid session ID format"})
+		return
 	}
 
 	messages, err := h.chatService.GetMessages(c.Request.Context(), user.User.ID, sessionID, 0)
@@ -129,8 +130,8 @@ func (h *ChatSessionHandler) GetMessages(c *gin.Context) {
 			return
 		} else {
 			c.JSON(500, gin.H{"message": "Internal server error"})
+			return
 		}
-		return
-}
+	}
 	c.JSON(200, gin.H{"message": "Successfully retrieved messages", "messages": messages})
 }

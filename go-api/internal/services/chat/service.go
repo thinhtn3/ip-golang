@@ -9,10 +9,11 @@ import (
 	"net/http"
 	"slices"
 	"time"
+
 	"github.com/google/uuid"
 	"github.com/supabase-community/postgrest-go"
-	chatDomain "github.com/thinhtn3/ip-golang.git/internal/domain/chat"
 	"github.com/supabase-community/supabase-go"
+	chatDomain "github.com/thinhtn3/ip-golang.git/internal/domain/chat"
 )
 
 
@@ -29,10 +30,10 @@ func NewChatService(supabase *supabase.Client) *ChatService {
 func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*chatDomain.ChatSession, error) {
 	session, err := s.GetSession(c, userID, questionID)
 
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
-	if (session != nil) {
+	if session != nil {
 		return session, nil
 	}
 
@@ -55,11 +56,12 @@ func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questio
 	if err != nil {
 		log.Println("Error creating chat session: ", err)
 		//TODO: Return error to handler
+		return nil, chatDomain.ErrInternalServerError
 	}
 
 	//get session after creation
 	created, err := s.GetSession(c, userID, questionID)
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 
@@ -78,7 +80,7 @@ func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID
 		Eq("archived", "false").
 		Eq("question_id", questionID.String()).
 		ExecuteTo(&sessions)
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 	
@@ -93,8 +95,8 @@ func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID
 // SENDING MESSAGES //
 func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID uuid.UUID, message string, role string) (*chatDomain.Message, error) {
 	//check userID owns sessionID
-	err := s.VerifySessionOwnership(&c, userID, sessionID)
-	if (err != nil) {
+	err := s.VerifySessionOwnership(c, userID, sessionID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -155,7 +157,7 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 	fmt.Println("Before count")
 	session := []chatDomain.ChatSession{}
 	_, err = s.supabase.From("chat_sessions").Select("message_count", "", false).Eq("id", sessionID.String()).ExecuteTo(&session)
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 	if session[0].MessageCount % 10 == 0 && session[0].MessageCount > 0 {
@@ -169,8 +171,8 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 
 // GET MESSAGES //
 func (s *ChatService) GetMessages(c context.Context, userID uuid.UUID, sessionID uuid.UUID, limit int) ([]chatDomain.Message, error) {
-	err := s.VerifySessionOwnership(&c, userID, sessionID)
-	if (err != nil) {
+	err := s.VerifySessionOwnership(c, userID, sessionID)
+	if err != nil {
 		return nil, err
 	}
 	
@@ -184,14 +186,14 @@ func (s *ChatService) GetMessages(c context.Context, userID uuid.UUID, sessionID
 		_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).ExecuteTo(&chatMessages)
 	}
 
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 	return chatMessages, nil
 }
 
 // VERIFY SESSION OWNERSHIP
-func (s *ChatService) VerifySessionOwnership(c *context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
+func (s *ChatService) VerifySessionOwnership(c context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
 	type Row struct {
 		ID uuid.UUID `json:"id"`
 	}
@@ -202,7 +204,7 @@ func (s *ChatService) VerifySessionOwnership(c *context.Context, userID uuid.UUI
 		Eq("user_id", userID.String()).
 		Eq("id", sessionID.String()).
 		ExecuteTo(&rows)
-	if (err != nil) {
+	if err != nil {
 		return chatDomain.ErrInternalServerError
 	}
 	if len(rows) == 0 {
@@ -219,7 +221,7 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 	}
 
 	summary, err := s.GetSummary(c, userID, sessionID)
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 
@@ -240,7 +242,7 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 	if summary.LastMessageID != uuid.Nil {
 		// If this is a new summary, get the first message and retrieve created_at Time to store
 		_, err = s.supabase.From("messages").Select("*", "", false).Eq("id", summary.LastMessageID.String()).ExecuteTo(&lastMessages)
-		if (err != nil) {
+		if err != nil {
 			return nil, err
 		}
 		createdAt = lastMessages[0].CreatedAt
@@ -249,7 +251,7 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 	// get the 10 messages AFTER the createdAt time
 	messages := []chatDomain.Message{}
 	_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).Order("created_at", &postgrest.OrderOpts{Ascending: true}).Gte("created_at", createdAt.Format(time.RFC3339)).Limit(10, "").ExecuteTo(&messages)
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 
@@ -261,13 +263,13 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 
 	body, err := json.Marshal(requestBody)
 	resp, err := http.Post("http://localhost:3000/summarize", "application/json", bytes.NewBuffer(body))
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 
 	var summaryResponse SummaryResponse
 	err = json.NewDecoder(resp.Body).Decode(&summaryResponse)
-	if (err != nil) {
+	if err != nil {
 		fmt.Println("Error decoding summary response: ", err)
 		return nil, err
 	}
@@ -279,7 +281,7 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 	
 	// upsert summary into database
 	_, _, err = s.supabase.From("conversation_summaries").Upsert(summary, "", "", "").Eq("id", summary.ID.String()).Execute()
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 
@@ -290,7 +292,7 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 func (s *ChatService) GetSummary(c context.Context, userID uuid.UUID, sessionID uuid.UUID) (*chatDomain.ConversationSummary, error) {
 	summaries := []chatDomain.ConversationSummary{}
 	_, err := s.supabase.From("conversation_summaries").Select("*", "", false).Eq("chat_session_id", sessionID.String()).ExecuteTo(&summaries)
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 	if len(summaries) == 0 {

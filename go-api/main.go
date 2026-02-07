@@ -14,8 +14,8 @@ func main() {
 	cfg := config.Load()
 	//init client and service layer for dependency injection
 	supabaseClient := config.InitSupabase(cfg.SupabaseURL, cfg.SupabaseServiceKey)
-	chatServiceInstance := chatService.NewChatService(supabaseClient)
-	chatHandlerInstance := chatHandler.NewChatSessionHandler(chatServiceInstance)
+	chatSvc := chatService.NewChatService(supabaseClient)
+	chatHdl := chatHandler.NewChatSessionHandler(chatSvc)
 
 
 	router := gin.Default()
@@ -36,9 +36,9 @@ func main() {
 	chat := router.Group("/chat")
 	chat.Use(middleware.NewAuthMiddleware(supabaseClient).Handle())
 	{
-		chat.POST("/create", chatHandlerInstance.CreateSessionFromQuestion)
-		chat.POST("/sessions/:sessionId/messages", chatHandlerInstance.SendMessage)
-		chat.GET("/sessions/:sessionId/messages", chatHandlerInstance.GetMessages)
+		chat.POST("/create", chatHdl.CreateSessionFromQuestion)
+		chat.POST("/sessions/:sessionId/messages", chatHdl.SendMessage)
+		chat.GET("/sessions/:sessionId/messages", chatHdl.GetMessages)
 	}
 
 	//health check
