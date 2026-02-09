@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"github.com/google/uuid"
+	"time"
 )
 
 // type ChatService interface {
@@ -21,21 +22,23 @@ type Repository interface {
 	// sessions
 	GetSessionByUserQuestion(ctx context.Context, userID uuid.UUID, questionID uuid.UUID) (*ChatSession, error)
 	InsertSession(ctx context.Context, session *ChatSession) error
-	GetMessageCount(ctx context.Context, sessionID uuid.UUID) (int, error)
-	IncrementMessageCount(ctx context.Context, sessionID uuid.UUID) error
-	VerifyOwnership(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error
+	GetSessionByID(ctx context.Context, sessionID uuid.UUID) (*ChatSession, error)
+	IncrementMessageCount(ctx context.Context, sessionID uuid.UUID) ()
+	VerifyOwnership(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) (bool, error)
 
 	// messages
 	InsertMessage(ctx context.Context, message *Message) error
-	GetMessages(ctx context.Context, sessionID uuid.UUID, limit int) ([]Message, error)
+	GetMessagesInitialLoad(ctx context.Context, sessionID uuid.UUID) ([]Message, error)
+	GetMessagesAfterCreatedAt(ctx context.Context, sessionID uuid.UUID, createdAt time.Time) ([]Message, error)
+	GetMessageByID(ctx context.Context, messageID uuid.UUID) (*Message, error)
 
 	// summaries
 	UpsertSummary(ctx context.Context, summary *ConversationSummary) error
 	GetSummary(ctx context.Context, sessionID uuid.UUID) (*ConversationSummary, error)
-	ListMessagesAfter(ctx context.Context, sessionID uuid.UUID, messageID uuid.UUID) ([]Message, error)
+	// ListMessagesAfter(ctx context.Context, sessionID uuid.UUID, messageID uuid.UUID, createdAt time.Time) ([]Message, error)
 }
 
 type AIClient interface {
-	SummarizeConversation(ctx context.Context, messages []Message) (string, error)
-	GenerateResponse(ctx context.Context, messages []Message) (string, error)
+	LangChainSummarizeConversation(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, summary *ConversationSummary, messages []Message) (string, error)
+	// GenerateResponse(ctx context.Context, messages []Message) (string, error)
 }

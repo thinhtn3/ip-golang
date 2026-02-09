@@ -33,6 +33,7 @@ app.post("/summarize", async (req, res) => {
     if (!summary) {
         console.log("Received no summary");
     }
+    console.log("Received summary: ", summary);
     console.log(summary, "FOO", messages);
     const response = await gemini.invoke(summaryPrompt, { summary: summary, messages: messages });
     console.log("Response: ", response.content);

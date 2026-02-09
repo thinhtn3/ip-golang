@@ -8,13 +8,17 @@ import (
 	chatService "github.com/thinhtn3/ip-golang.git/internal/services/chat"
 	chatHandler "github.com/thinhtn3/ip-golang.git/internal/handlers/chat"
 	authHandler "github.com/thinhtn3/ip-golang.git/internal/handlers/auth"
+	chatrepo "github.com/thinhtn3/ip-golang.git/internal/infra/supabase/chat"
+	chatAIClient "github.com/thinhtn3/ip-golang.git/internal/infra/llm/chat"
 )
 
 func main() {
 	cfg := config.Load()
 	//init client and service layer for dependency injection
 	supabaseClient := config.InitSupabase(cfg.SupabaseURL, cfg.SupabaseServiceKey)
-	chatSvc := chatService.NewChatService(supabaseClient)
+	repo := chatrepo.NewChatRepo(supabaseClient)
+	aiClient := chatAIClient.NewChatAIClient(repo)
+	chatSvc := chatService.NewChatService(repo, aiClient)
 	chatHdl := chatHandler.NewChatSessionHandler(chatSvc)
 
 
@@ -38,7 +42,7 @@ func main() {
 	{
 		chat.POST("/create", chatHdl.CreateSessionFromQuestion)
 		chat.POST("/sessions/:sessionId/messages", chatHdl.SendMessage)
-		chat.GET("/sessions/:sessionId/messages", chatHdl.GetMessages)
+		chat.GET("/sessions/:sessionId/messages", chatHdl.InitialLoadMessages)
 	}
 
 	//health check

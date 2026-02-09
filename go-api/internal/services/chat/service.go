@@ -1,44 +1,46 @@
 package chat
 
 import (
-	"bytes"
+	// "bytes"
+	// "encoding/json"
+	// "log"
+	// "net/http"
+	// "slices"
 	"context"
-	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/supabase-community/postgrest-go"
-	"github.com/supabase-community/supabase-go"
 	chatDomain "github.com/thinhtn3/ip-golang.git/internal/domain/chat"
 )
 
 
 
 type ChatService struct {
-	supabase *supabase.Client
+	repo chatDomain.Repository
+	aiClient chatDomain.AIClient
 }
 
-func NewChatService(supabase *supabase.Client) *ChatService {
-	return &ChatService{supabase: supabase}
+func NewChatService(repo chatDomain.Repository, aiClient chatDomain.AIClient) *ChatService {
+	return &ChatService{repo: repo, aiClient: aiClient}
 }
 
-// CREATE SESSION //
-func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*chatDomain.ChatSession, error) {
-	session, err := s.GetSession(c, userID, questionID)
-
+// ===============================
+// SESSION SERVICES
+// ===============================
+func (r *ChatService) CreateSession(ctx context.Context, userID uuid.UUID, questionID uuid.UUID) (*chatDomain.ChatSession, error) {
+	//check if session already exists
+	session, err := r.GetSession(ctx, userID, questionID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("service: failed to get session: %w", err)
 	}
+
 	if session != nil {
 		return session, nil
 	}
 
 	//create chat session object
-	chat := chatDomain.ChatSession{
+	newSession := chatDomain.ChatSession{
 		ID: uuid.New(),
 		UserID: userID,
 		QuestionID: questionID,
@@ -48,58 +50,48 @@ func (s *ChatService) CreateSession(c context.Context, userID uuid.UUID, questio
 	}
 
 	//insert chat session into supabase
-	_, _, err = s.supabase.
-		From("chat_sessions").
-		Insert(chat, true, "", "", "").
-		Execute()
-	
+	err = r.repo.InsertSession(ctx, &newSession)
+
 	if err != nil {
-		log.Println("Error creating chat session: ", err)
-		//TODO: Return error to handler
-		return nil, chatDomain.ErrInternalServerError
+		return nil, fmt.Errorf("service: failed to insert session: %w", err)
 	}
 
 	//get session after creation
-	created, err := s.GetSession(c, userID, questionID)
+	created, err := r.repo.GetSessionByUserQuestion(ctx, userID, questionID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("service: failed to get session by user question after creation: %w", err)
 	}
 
-	log.Println("Found created session", created.ID, created.QuestionID)
 	return created, nil
 }
 
-// GET SESSION ID BY USER ID AND QUESTION ID //
-func (s *ChatService) GetSession(c context.Context, userID uuid.UUID, questionID uuid.UUID) (*chatDomain.ChatSession, error) {
-	sessions := []chatDomain.ChatSession{}
-	//Return slice of rows which matches userId and questionId (because executeTo returns a slice of rows)
-	_, err := s.supabase.
-		From("chat_sessions").
-		Select("*", "", false).
-		Eq("user_id", userID.String()).
-		Eq("archived", "false").
-		Eq("question_id", questionID.String()).
-		ExecuteTo(&sessions)
+func (r *ChatService) GetSession(ctx context.Context, userID uuid.UUID, questionID uuid.UUID) (*chatDomain.ChatSession, error) {
+	session, err := r.repo.GetSessionByUserQuestion(ctx, userID, questionID)
 	if err != nil {
-		return nil, err
-	}
-	
-	if len(sessions) == 0 {
-		return nil, nil
+		return nil, chatDomain.ErrInternalServerError
 	}
 
-	return &sessions[0], nil
+	if session == nil {
+		return nil, nil //session not found
+	}
 
+	return session, nil //session found
 }
 
-// SENDING MESSAGES //
-func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID uuid.UUID, message string, role string) (*chatDomain.Message, error) {
+// ===============================
+// MESSAGES SERVICES
+// ===============================
+func (r *ChatService) SendMessage(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, message string, role string) (*chatDomain.Message, error) {
 	//check userID owns sessionID
-	err := s.VerifySessionOwnership(c, userID, sessionID)
+	owns, err := r.repo.VerifyOwnership(ctx, userID, sessionID)
 	if err != nil {
 		return nil, err
 	}
+	if !owns {
+		return nil, chatDomain.ErrForbidden
+	}
 
+	//create user message object
 	userMessage := chatDomain.Message{
 		ID: uuid.New(),
 		UserID: userID,
@@ -108,38 +100,20 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 		Message: message,
 		CreatedAt: time.Now().UTC(),
 	}
-	s.supabase.From("messages").Insert(userMessage, false, "", "", "").Execute()
-	//increase message count by 1 in chat_sessions table
-	s.supabase.Rpc("increment_message_count", "", map[string]interface{}{
-		"session_id": sessionID.String(),
-	})
+	fmt.Println("service: Creating user message object")
+	err = r.repo.InsertMessage(ctx, &userMessage)
+	if err != nil {
+		return nil, fmt.Errorf("service: failed to insert message: %w", err)
+	}
+	fmt.Println("service: User Message inserted")
+	r.repo.IncrementMessageCount(ctx, sessionID)
+	fmt.Println("service: Message count incremented")
 
-	// TODO 1/22: Create post request to /generate endpoint with user request + summary for context
-	// //User request is the last 10 messages in the chat session for langchain
-	// userRequest, err := s.GetMessages(c, userID, sessionID, 10)
-	// if (err != nil) {
-	// 	return nil, err
-	// }
-	// //Request body is a map with key "body" and value is the user's past 10 messages
-	// requestBody := map[string][]models.Message{
-	// 	"body": userRequest,
-	// }
-	// body, err := json.Marshal(requestBody)
-	// resp, err := http.Post("http://localhost:3000/generate", "application/json", bytes.NewBuffer(body))
-	// if (err != nil) {
-	// 	log.Println("Error calling AI service: ", err)
-	// }
 
-	//read string response from post request body
 	var aiResponse struct {
 		Content string `json:"content"`
 		Role string `json:"role"`
 	}
-	// err = json.NewDecoder(resp.Body).Decode(&aiResponse)
-	// if (err != nil) {
-	// 	log.Println("Error decoding AI response: ", err)
-	// }
-	//insert AI response into database
 	aiMessage := chatDomain.Message{
 		ID: uuid.New(),
 		UserID: userID,
@@ -148,84 +122,60 @@ func (s *ChatService) SendMessage(c context.Context, userID uuid.UUID, sessionID
 		Message: aiResponse.Content,
 		CreatedAt: time.Now().UTC(),
 	}
-	s.supabase.From("messages").Insert(aiMessage, false, "", "", "").Execute()
-	s.supabase.Rpc("increment_message_count", "", map[string]interface{}{
-		"session_id": sessionID.String(),
-	})
+	err = r.repo.InsertMessage(ctx, &aiMessage)
+	if err != nil {
+		return nil, fmt.Errorf("service: failed to insert AI message: %w", err)
+	}
+	r.repo.IncrementMessageCount(ctx, sessionID)
+	fmt.Println("service: Message count incremented")
 
 	// Check if message count is a multiple of 10, if so, summarize conversation
 	fmt.Println("Before count")
-	session := []chatDomain.ChatSession{}
-	_, err = s.supabase.From("chat_sessions").Select("message_count", "", false).Eq("id", sessionID.String()).ExecuteTo(&session)
+	session, err := r.repo.GetSessionByID(ctx, sessionID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("service: failed to get session by user question: %w", err)
 	}
-	if session[0].MessageCount % 10 == 0 && session[0].MessageCount > 0 {
-		s.SummarizeConversation(c, userID, sessionID)
+	messageCount := session.MessageCount
+	fmt.Println("service: Message count: ", messageCount)
+	if messageCount % 10 == 0 && messageCount > 0 {
+		summary, err := r.SummarizeConversation(ctx, userID, sessionID)
+		if err != nil {
+			return nil, fmt.Errorf("service: failed to summarize conversation: %w", err)
+		}
+		//print summary content to console
+		fmt.Println("service: Summary content: ", summary.Content)
 	}
-	fmt.Println("After count")
-	// defer resp.Body.Close()
 
 	return &userMessage, nil
 }
 
-// GET MESSAGES //
-func (s *ChatService) GetMessages(c context.Context, userID uuid.UUID, sessionID uuid.UUID, limit int) ([]chatDomain.Message, error) {
-	err := s.VerifySessionOwnership(c, userID, sessionID)
+func (r *ChatService) GetMessages(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, limit int) ([]chatDomain.Message, error) {
+	owns, err := r.repo.VerifyOwnership(ctx, userID, sessionID)
 	if err != nil {
 		return nil, err
+	}
+	if !owns {
+		return nil, chatDomain.ErrForbidden
 	}
 	
-	chatMessages := []chatDomain.Message{}
-	if limit > 0 {
-		//order by the most recent 10 in ascending order to get the most recent 10 messages (fetch message to send to langchain for context)
-		_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).Order("created_at", &postgrest.OrderOpts{Ascending: false}).Limit(limit, "").ExecuteTo(&chatMessages)
-		slices.Reverse(chatMessages) //reverse slice after ascending false so the latest message is at end
-	} else {
-		//fetch all messages for the chat session (initial load)
-		_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).ExecuteTo(&chatMessages)
-	}
-
+	chatMessages, err := r.repo.GetMessagesInitialLoad(ctx, sessionID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("service: failed to get messages initial load: %w", err)
 	}
 	return chatMessages, nil
 }
 
-// VERIFY SESSION OWNERSHIP
-func (s *ChatService) VerifySessionOwnership(c context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
-	type Row struct {
-		ID uuid.UUID `json:"id"`
-	}
-	rows := []Row{}
-	_, err := s.supabase.
-		From("chat_sessions").
-		Select("*", "", false).
-		Eq("user_id", userID.String()).
-		Eq("id", sessionID.String()).
-		ExecuteTo(&rows)
-	if err != nil {
-		return chatDomain.ErrInternalServerError
-	}
-	if len(rows) == 0 {
-		//Session not found, return forbidden error
-		return chatDomain.ErrForbidden
-	}
-	return nil
-}
-
-// SUMMARIZE CONVERSATION //
-func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID, sessionID uuid.UUID) (*chatDomain.ConversationSummary, error) {
-	type SummaryResponse struct {
-		Content string `json:"content"`
-	}
-
-	summary, err := s.GetSummary(c, userID, sessionID)
+// ===============================
+// SUMMARIZATION SERVICES
+// ===============================
+func (r *ChatService) SummarizeConversation(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) (*chatDomain.ConversationSummary, error) {
+	//1. Get existing summary from repository
+	summary, err := r.repo.GetSummary(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
 
-	// If no summary found, create a new one
+	//2. If no summary, create a new one
 	if summary == nil {
 		summary = &chatDomain.ConversationSummary{
 			ID: uuid.New(),
@@ -235,68 +185,35 @@ func (s *ChatService) SummarizeConversation(c context.Context, userID uuid.UUID,
 			LastMessageID: uuid.Nil,
 		}
 	}
-
-	var createdAt time.Time
-	lastMessages := []chatDomain.Message{}
+	var createdAt time.Time;
 
 	if summary.LastMessageID != uuid.Nil {
-		// If this is a new summary, get the first message and retrieve created_at Time to store
-		_, err = s.supabase.From("messages").Select("*", "", false).Eq("id", summary.LastMessageID.String()).ExecuteTo(&lastMessages)
+		// Last message ID is not nil, use the last message time stamp
+		lastMessage, err := r.repo.GetMessageByID(ctx, summary.LastMessageID);
 		if err != nil {
 			return nil, err
 		}
-		createdAt = lastMessages[0].CreatedAt
+		createdAt = lastMessage.CreatedAt
+	} else if summary.LastMessageID == uuid.Nil {
+		// First time summarizing, use the first message time stamp in the session
+		firstMessage, err := r.repo.GetMessagesInitialLoad(ctx, sessionID);
+		if err != nil {
+			return nil, err
+		}
+		createdAt = firstMessage[0].CreatedAt
 	}
 
-	// get the 10 messages AFTER the createdAt time
-	messages := []chatDomain.Message{}
-	_, err = s.supabase.From("messages").Select("*", "", false).Eq("chat_session_id", sessionID.String()).Order("created_at", &postgrest.OrderOpts{Ascending: true}).Gte("created_at", createdAt.Format(time.RFC3339)).Limit(10, "").ExecuteTo(&messages)
+	//3. Get messages after the createdAt time stamp
+	messagesToSummarize, err := r.repo.GetMessagesAfterCreatedAt(ctx, sessionID, createdAt);
 	if err != nil {
 		return nil, err
 	}
 
-	// send summary and messages slice to localhost 300 summarize post
-	requestBody := map[string]interface{}{
-		"summary": summary.Content,
-		"messages": messages,
-	}
-
-	body, err := json.Marshal(requestBody)
-	resp, err := http.Post("http://localhost:3000/summarize", "application/json", bytes.NewBuffer(body))
+	//4. Summarize the messages
+	summary.Content, err = r.aiClient.LangChainSummarizeConversation(ctx, userID, sessionID, summary, messagesToSummarize);
 	if err != nil {
 		return nil, err
 	}
-
-	var summaryResponse SummaryResponse
-	err = json.NewDecoder(resp.Body).Decode(&summaryResponse)
-	if err != nil {
-		fmt.Println("Error decoding summary response: ", err)
-		return nil, err
-	}
-
-	//update summary
-	summary.Content = summaryResponse.Content
-	summary.UpdatedAt = time.Now().UTC()
-	summary.LastMessageID = messages[len(messages)-1].ID
 	
-	// upsert summary into database
-	_, _, err = s.supabase.From("conversation_summaries").Upsert(summary, "", "", "").Eq("id", summary.ID.String()).Execute()
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
 	return summary, nil
-}
-
-func (s *ChatService) GetSummary(c context.Context, userID uuid.UUID, sessionID uuid.UUID) (*chatDomain.ConversationSummary, error) {
-	summaries := []chatDomain.ConversationSummary{}
-	_, err := s.supabase.From("conversation_summaries").Select("*", "", false).Eq("chat_session_id", sessionID.String()).ExecuteTo(&summaries)
-	if err != nil {
-		return nil, err
-	}
-	if len(summaries) == 0 {
-		return nil, nil
-	}
-	return &summaries[0], nil
 }

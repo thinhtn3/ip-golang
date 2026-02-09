@@ -1,11 +1,12 @@
 package chat
 
 import (
+	"fmt"
+	"net/http"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	chatDomain "github.com/thinhtn3/ip-golang.git/internal/domain/chat"
 	chatService "github.com/thinhtn3/ip-golang.git/internal/services/chat"
-	"net/http"
 )
 
 type ChatSessionHandler struct {
@@ -18,8 +19,9 @@ func NewChatSessionHandler(chatService *chatService.ChatService) *ChatSessionHan
 	return &ChatSessionHandler{chatService: chatService}
 }
 
-
-// HANDLER FUNCTION TO CREATE CHAT SESSION 
+// ===============================
+// SESSION HANDLER
+// ===============================
 func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
 	// get user id from context
 	userID, err := getUserIDFromContext(c)
@@ -35,30 +37,42 @@ func (h *ChatSessionHandler) CreateSessionFromQuestion(c *gin.Context) {
 	// bind request to go type
 	req := ChatSessionRequest{}
 	err = bindRequest(c, &req)
-
-	// call service
-	session, err := h.chatService.CreateSession(c.Request.Context(), userID, uuid.MustParse(req.QuestionID))
 	if err != nil {
-		c.JSON(500, gin.H{"message": "Internal server error"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request"})
 		return
 	}
 
-	c.JSON(200, gin.H{"message": "Chat session created successfully", "session": session})
+	// call service
+	questionID, err := uuid.Parse(req.QuestionID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid question ID format"})
+		return
+	}
+
+	session, err := h.chatService.CreateSession(c.Request.Context(), userID, questionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Internal server error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Chat session created successfully", "session": session})
 }
 
 
-// SENDING MESSAGES 
+// ===============================
+// MESSAGE HANDLER
+// ===============================
 func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
-		c.JSON(400, gin.H{"message": "Invalid request"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request"})
 		return
 	}
 	
 
 	sessionID, err := parseSessionIDFromContext(c)
 	if err != nil {
-		c.JSON(400, gin.H{"message": "Invalid session ID format"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid session ID format"})
 		return
 	}
 
@@ -74,7 +88,8 @@ func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
-	chat, err := h.chatService.SendMessage(c, userID, sessionID, req.Message, req.Role);
+	fmt.Println("handler: Sending message")
+	chat, err := h.chatService.SendMessage(c.Request.Context(), userID, sessionID, req.Message, req.Role);
 	if err != nil {
 		if err == chatDomain.ErrForbidden {
 			c.JSON(http.StatusForbidden, gin.H{"message": "Forbidden: User does not own session"})
@@ -87,15 +102,13 @@ func (h *ChatSessionHandler) SendMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Succesfully sent", "chat": chat})
 }
 
-
-// GET MESSAGES INITIAL LOAD
-func (h *ChatSessionHandler) GetMessages(c *gin.Context) {
+func (h *ChatSessionHandler) InitialLoadMessages(c *gin.Context) {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request"})
 		return
 	}
-
+	
 	sessionID, err := parseSessionIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid session ID format"})

@@ -1,4 +1,4 @@
-package chatrepo
+package chatRepo
 
 
 import (
@@ -19,7 +19,9 @@ func NewChatRepo(supabase *supabase.Client) *ChatRepo {
 	return &ChatRepo{supabase: supabase}
 }
 
+// ===============================
 // SESSIONS 
+// ===============================
 func (r *ChatRepo) GetSessionByUserQuestion(ctx context.Context, userID uuid.UUID, questionID uuid.UUID) (*chatDomain.ChatSession, error) {
 	sessions := []chatDomain.ChatSession{}
 	//Return slice of rows which matches userId and questionId (because executeTo returns a slice of rows)
@@ -51,31 +53,27 @@ func (r *ChatRepo) InsertSession(ctx context.Context, session *chatDomain.ChatSe
 	return nil
 }
 
-func (r *ChatRepo) GetMessageCount(ctx context.Context, sessionID uuid.UUID) (int, error) {
-	count := 0
+func (r *ChatRepo) GetSessionByID(ctx context.Context, sessionID uuid.UUID) (*chatDomain.ChatSession, error) {
+	session := []chatDomain.ChatSession{}
 	_, err := r.supabase.
-		From("messages").
-		Select("COUNT(*)", "", false).
-		Eq("chat_session_id", sessionID.String()).
-		ExecuteTo(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-func (r *ChatRepo) IncrementMessageCount(ctx context.Context, sessionID uuid.UUID) error {
-	_, _, err := r.supabase.
 		From("chat_sessions").
-		Update(map[string]interface{}{"message_count": "message_count + 1"}).
+		Select("*", "", false).
 		Eq("id", sessionID.String()).
-		Execute()
+		ExecuteTo(&session)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	if len(session) == 0 {
+		return nil, nil
+	}
+	return &session[0], nil
 }
 
+func (r *ChatRepo) IncrementMessageCount(ctx context.Context, sessionID uuid.UUID) {
+	r.supabase.Rpc("increment_message_count", "", map[string]interface{}{
+		"session_id": sessionID.String(),
+	})
+}
 func (r *ChatRepo) VerifyOwnership(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) (bool, error) {
 	type Row struct {
 		ID uuid.UUID `json:"id"`
@@ -93,7 +91,9 @@ func (r *ChatRepo) VerifyOwnership(ctx context.Context, userID uuid.UUID, sessio
 	return len(rows) > 0, nil
 }
 
+// ===============================
 // MESSAGES
+// ===============================
 func (r *ChatRepo) InsertMessage(ctx context.Context, message *chatDomain.Message) error {
 	_, _, err := r.supabase.
 		From("messages").
@@ -118,12 +118,13 @@ func (r *ChatRepo) GetMessagesInitialLoad(ctx context.Context, sessionID uuid.UU
 	return messages, nil
 }
 
-func (r *ChatRepo) GetMessagesAfterCreatedAt(ctx context.Context, sessionID uuid.UUID, messageID uuid.UUID) ([]chatDomain.Message, error) {
+func (r *ChatRepo) GetMessagesAfterCreatedAt(ctx context.Context, sessionID uuid.UUID, createdAt time.Time) ([]chatDomain.Message, error) {
 	messages := []chatDomain.Message{}
 	_, err := r.supabase.
 		From("messages").
 		Select("*", "", false).
 		Eq("chat_session_id", sessionID.String()).
+		Gte("created_at", createdAt.Format(time.RFC3339)).
 		Order("created_at", &postgrest.OrderOpts{Ascending: false}).
 		Limit(10, "").
 		ExecuteTo(&messages)
@@ -134,6 +135,23 @@ func (r *ChatRepo) GetMessagesAfterCreatedAt(ctx context.Context, sessionID uuid
 	return messages, nil
 }
 
+func (r *ChatRepo) GetMessageByID(ctx context.Context, messageID uuid.UUID) (*chatDomain.Message, error) {
+	message := chatDomain.Message{}
+	_, err := r.supabase.
+		From("messages").
+		Select("*", "", false).
+		Eq("id", messageID.String()).
+		ExecuteTo(&message)
+	if err != nil {
+		return nil, err
+	}
+	return &message, nil
+}
+
+
+// ===============================
+// SUMMARIES
+// ===============================
 func (r *ChatRepo) UpsertSummary(ctx context.Context, summary *chatDomain.ConversationSummary) error {
 	_, _, err := r.supabase.
 		From("conversation_summaries").
@@ -162,18 +180,18 @@ func (r *ChatRepo) GetSummary(ctx context.Context, sessionID uuid.UUID) (*chatDo
 	return &summaries[0], nil
 }
 
-func (r *ChatRepo) ListMessagesAfter(ctx context.Context, sessionID uuid.UUID, messageID uuid.UUID, createdAt time.Time) ([]chatDomain.Message, error) {
-	messages := []chatDomain.Message{}
-	_, err := r.supabase.
-		From("messages").
-		Select("*", "", false).
-		Eq("chat_session_id", sessionID.String()).
-		Order("created_at", &postgrest.OrderOpts{Ascending: true}).
-		Gte("created_at", createdAt.Format(time.RFC3339)).
-		Limit(10, "").
-		ExecuteTo(&messages)
-	if err != nil {
-		return nil, err
-	}
-	return messages, nil
-}
+// func (r *ChatRepo) ListMessagesAfterTime(ctx context.Context, sessionID uuid.UUID, messageID uuid.UUID, createdAt time.Time) ([]chatDomain.Message, error) {
+// 	messages := []chatDomain.Message{}
+// 	_, err := r.supabase.
+// 		From("messages").
+// 		Select("*", "", false).
+// 		Eq("chat_session_id", sessionID.String()).
+// 		Order("created_at", &postgrest.OrderOpts{Ascending: true}).
+// 		Gte("created_at", createdAt.Format(time.RFC3339)).
+// 		Limit(10, "").
+// 		ExecuteTo(&messages)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return messages, nil
+// }
