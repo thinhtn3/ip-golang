@@ -140,6 +140,7 @@ func (r *ChatService) SendMessage(ctx context.Context, userID uuid.UUID, session
 	if messageCount % 10 == 0 && messageCount > 0 {
 		summary, err := r.SummarizeConversation(ctx, userID, sessionID)
 		if err != nil {
+			fmt.Println("service: failed to summarize conversation: ", err)
 			return nil, fmt.Errorf("service: failed to summarize conversation: %w", err)
 		}
 		//print summary content to console
@@ -211,6 +212,14 @@ func (r *ChatService) SummarizeConversation(ctx context.Context, userID uuid.UUI
 
 	//4. Summarize the messages
 	summary.Content, err = r.aiClient.LangChainSummarizeConversation(ctx, userID, sessionID, summary, messagesToSummarize);
+	if err != nil {
+		return nil, err
+	}
+
+	// Update current summary object
+	summary.UpdatedAt = time.Now().UTC();
+	summary.LastMessageID = messagesToSummarize[len(messagesToSummarize)-1].ID;
+	err = r.repo.UpsertSummary(ctx, summary);
 	if err != nil {
 		return nil, err
 	}

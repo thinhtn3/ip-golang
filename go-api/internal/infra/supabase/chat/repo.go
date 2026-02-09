@@ -136,16 +136,16 @@ func (r *ChatRepo) GetMessagesAfterCreatedAt(ctx context.Context, sessionID uuid
 }
 
 func (r *ChatRepo) GetMessageByID(ctx context.Context, messageID uuid.UUID) (*chatDomain.Message, error) {
-	message := chatDomain.Message{}
+	messages := []chatDomain.Message{}
 	_, err := r.supabase.
 		From("messages").
 		Select("*", "", false).
 		Eq("id", messageID.String()).
-		ExecuteTo(&message)
+		ExecuteTo(&messages)
 	if err != nil {
 		return nil, err
 	}
-	return &message, nil
+	return &messages[0], nil
 }
 
 
