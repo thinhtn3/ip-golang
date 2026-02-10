@@ -31,6 +31,7 @@ type Repository interface {
 	GetMessagesInitialLoad(ctx context.Context, sessionID uuid.UUID) ([]Message, error)
 	GetMessagesAfterCreatedAt(ctx context.Context, sessionID uuid.UUID, createdAt time.Time) ([]Message, error)
 	GetMessageByID(ctx context.Context, messageID uuid.UUID) (*Message, error)
+	GetRecentMessages(ctx context.Context, sessionID uuid.UUID, limit int) ([]Message, error)
 
 	// summaries
 	UpsertSummary(ctx context.Context, summary *ConversationSummary) error
@@ -40,5 +41,5 @@ type Repository interface {
 
 type AIClient interface {
 	LangChainSummarizeConversation(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, summary *ConversationSummary, messages []Message) (string, error)
-	// GenerateResponse(ctx context.Context, messages []Message) (string, error)
+	RespondToUserMessage(ctx context.Context, messages []Message, summary *ConversationSummary) (string, error)
 }
