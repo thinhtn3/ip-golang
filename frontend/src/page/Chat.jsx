@@ -9,7 +9,7 @@ export default function Chat() {
     const [message, setMessage] = useState("");
     const [messages, setMessages] = useState([]);
     const [role, setRole] = useState("user");
-    const [authorized, setAuthorized] = useState(false);
+    const [authorized, setAuthorized] = useState(true);
     const { sessionId } = useParams();
   
     const getAccessToken = async () => {

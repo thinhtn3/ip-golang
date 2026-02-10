@@ -14,6 +14,11 @@ class Gemini {
     }
 
     async invoke(instruction, input = {}) {
+        if (Array.isArray(instruction)) {
+            const response = await this.gemini.invoke(instruction);
+            return response;
+        }
+        
         this.prompt = instruction;
         this.chain = this.prompt.pipe(this.gemini);
         const response = await this.chain.invoke(input);

@@ -4,20 +4,22 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/thinhtn3/ip-golang.git/config"
-	"github.com/thinhtn3/ip-golang.git/internal/handlers"
 	"github.com/thinhtn3/ip-golang.git/internal/middleware"
-	"github.com/thinhtn3/ip-golang.git/internal/services"
+	chatService "github.com/thinhtn3/ip-golang.git/internal/services/chat"
+	chatHandler "github.com/thinhtn3/ip-golang.git/internal/handlers/chat"
+	authHandler "github.com/thinhtn3/ip-golang.git/internal/handlers/auth"
+	chatrepo "github.com/thinhtn3/ip-golang.git/internal/infra/supabase/chat"
+	chatAIClient "github.com/thinhtn3/ip-golang.git/internal/infra/llm/chat"
 )
 
 func main() {
-	//enable cors for localhost:5173
-	
-	
 	cfg := config.Load()
-	//init client and service layer for dependency injectionwhy
+	//init client and service layer for dependency injection
 	supabaseClient := config.InitSupabase(cfg.SupabaseURL, cfg.SupabaseServiceKey)
-	chatService := services.NewChatService(supabaseClient)
-	chatHandler := handlers.NewChatSessionHandler(chatService)
+	repo := chatrepo.NewChatRepo(supabaseClient)
+	aiClient := chatAIClient.NewChatAIClient(repo)
+	chatSvc := chatService.NewChatService(repo, aiClient)
+	chatHdl := chatHandler.NewChatSessionHandler(chatSvc)
 
 
 	router := gin.Default()
@@ -32,15 +34,15 @@ func main() {
 	user := router.Group("/user")
 	user.Use(middleware.NewAuthMiddleware(supabaseClient).Handle())
 	{
-		user.POST("/profile", handlers.GetProfile)
+		user.POST("/profile", authHandler.GetProfile)
 	}
 
 	chat := router.Group("/chat")
 	chat.Use(middleware.NewAuthMiddleware(supabaseClient).Handle())
 	{
-		chat.POST("/create", chatHandler.CreateSessionFromQuestion)
-		chat.POST("/sessions/:sessionId/messages", chatHandler.SendMessage)
-		chat.GET("/sessions/:sessionId/messages", chatHandler.GetMessages)
+		chat.POST("/create", chatHdl.CreateSessionFromQuestion)
+		chat.POST("/sessions/:sessionId/messages", chatHdl.SendMessage)
+		chat.GET("/sessions/:sessionId/messages", chatHdl.InitialLoadMessages)
 	}
 
 	//health check
