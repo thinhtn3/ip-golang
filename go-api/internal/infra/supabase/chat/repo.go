@@ -148,6 +148,24 @@ func (r *ChatRepo) GetMessageByID(ctx context.Context, messageID uuid.UUID) (*ch
 	return &messages[0], nil
 }
 
+func (r *ChatRepo) GetRecentMessages(ctx context.Context, sessionID uuid.UUID, limit int) ([]chatDomain.Message, error) {
+    messages := []chatDomain.Message{}
+    _, err := r.supabase.
+        From("messages").
+        Select("*", "", false).
+        Eq("chat_session_id", sessionID.String()).
+        Order("created_at", &postgrest.OrderOpts{Ascending: false}).
+        Limit(limit, "").
+        ExecuteTo(&messages)
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    slices.Reverse(messages) //reverse slice after ascending false so the latest message is at end
+    return messages, nil
+}
+
 
 // ===============================
 // SUMMARIES
