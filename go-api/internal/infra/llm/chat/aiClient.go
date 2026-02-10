@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"net/http"
-	"fmt"
 	"encoding/json"
 
 	"github.com/google/uuid"
