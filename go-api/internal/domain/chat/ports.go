@@ -41,5 +41,5 @@ type Repository interface {
 
 type AIClient interface {
 	LangChainSummarizeConversation(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, summary *ConversationSummary, messages []Message) (string, error)
-	RespondToUserMessage(ctx context.Context, messages []Message, summary *ConversationSummary) (string, error)
+	RespondToUserMessage(ctx context.Context, messages []Message, summary *ConversationSummary) (string, string, error)
 }
