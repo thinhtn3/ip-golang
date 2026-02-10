@@ -193,23 +193,15 @@ func (r *ChatRepo) GetSummary(ctx context.Context, sessionID uuid.UUID) (*chatDo
 		return nil, err
 	}
 	if len(summaries) == 0 {
-		return nil, nil
+		// create a new summary
+		summary := chatDomain.ConversationSummary{
+			ID: uuid.New(),
+			ChatSessionID: sessionID,
+			Content: "No summary found",
+			UpdatedAt: time.Now().UTC(),
+			LastMessageID: uuid.Nil,
+		}
+		return &summary, nil
 	}
 	return &summaries[0], nil
 }
-
-// func (r *ChatRepo) ListMessagesAfterTime(ctx context.Context, sessionID uuid.UUID, messageID uuid.UUID, createdAt time.Time) ([]chatDomain.Message, error) {
-// 	messages := []chatDomain.Message{}
-// 	_, err := r.supabase.
-// 		From("messages").
-// 		Select("*", "", false).
-// 		Eq("chat_session_id", sessionID.String()).
-// 		Order("created_at", &postgrest.OrderOpts{Ascending: true}).
-// 		Gte("created_at", createdAt.Format(time.RFC3339)).
-// 		Limit(10, "").
-// 		ExecuteTo(&messages)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return messages, nil
-// }
