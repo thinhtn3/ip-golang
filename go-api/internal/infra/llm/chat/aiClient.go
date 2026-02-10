@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/http"
-
+	"fmt"
 	"encoding/json"
 
 	"github.com/google/uuid"
@@ -34,6 +34,7 @@ func (c *ChatAIClient) LangChainSummarizeConversation(ctx context.Context, userI
 	if err != nil {
 		return "", err
 	}
+	defer resp.Body.Close()
 	type SummaryResponse struct {
 		Content string `json:"content"`
 	}
@@ -43,4 +44,30 @@ func (c *ChatAIClient) LangChainSummarizeConversation(ctx context.Context, userI
 		return "", err
 	}
 	return summaryResponse.Content, nil
+}
+
+func (c *ChatAIClient) RespondToUserMessage(ctx context.Context, messages []chatDomain.Message, summary *chatDomain.ConversationSummary) (string, string, error) {
+	requestBody := map[string]interface{}{
+		"summary": summary.Content,
+		"messages": messages,
+	}
+	body, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", "", err
+	}
+	resp, err := http.Post("http://localhost:3000/generate", "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	type Response struct {
+		Content string `json:"content"`
+		Role string `json:"role"`
+	}
+	var response Response
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		return "", "", err
+	}
+	return response.Content, response.Role, nil
 }
