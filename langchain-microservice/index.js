@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import gemini from './gemini.js';
-import { HumanMessage, AIMessage } from '@langchain/core/messages';
+import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages';
 import { summaryPrompt } from './instruction.js';
 dotenv.config();
 
@@ -10,19 +10,18 @@ const app = express();
 app.use(express.json());
 
 app.post("/generate", async (req, res) => {
-    const { body } = req.body;
-    const chain = body.map((m) => {
+    const { summary, messages } = req.body;
+    const chain = messages.map((m) => {
         if (m.role === "user") {
             return new HumanMessage(m.message);
         } else if (m.role === "assistant") {
             return new AIMessage(m.message);
         }
     })
-    // const response = await gemini.invoke(chain);
-    // console.log(response.content);
+    const response = await gemini.invoke([new SystemMessage(summary), ...chain]);
+    console.log(response.content);
     res.json({
-        content: "test",
-        // content: response.content,
+        content: response.content,
         role: "assistant"
     });
 });
