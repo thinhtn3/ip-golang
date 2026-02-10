@@ -31,11 +31,9 @@ func NewChatService(repo chatDomain.Repository, aiClient chatDomain.AIClient) *C
 func (r *ChatService) CreateSession(ctx context.Context, userID uuid.UUID, questionID uuid.UUID) (*chatDomain.ChatSession, error) {
 	// 1. check if session already exists
 	session, err := r.GetSession(ctx, userID, questionID)
-	if err != nil {
-		return nil, fmt.Errorf("service: failed to get session: %w", err)
-	}
 
 	if session != nil {
+		fmt.Println("service: Session already exists")
 		return session, nil
 	}
 
@@ -50,6 +48,7 @@ func (r *ChatService) CreateSession(ctx context.Context, userID uuid.UUID, quest
 	}
 
 	// 3. insert session into database
+	fmt.Println("service: Inserting session into database")
 	err = r.repo.InsertSession(ctx, &newSession)
 
 	if err != nil {
@@ -75,6 +74,7 @@ func (r *ChatService) GetSession(ctx context.Context, userID uuid.UUID, question
 		return nil, chatDomain.ErrSessionNotFound
 	}
 
+	fmt.Println("service: Session found")
 	return session, nil
 }
 
@@ -83,6 +83,7 @@ func (r *ChatService) GetSession(ctx context.Context, userID uuid.UUID, question
 // ===============================
 func (r *ChatService) SendMessage(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, message string, role string) (*chatDomain.Message, error) {
 	// 1. check userID owns sessionID
+	fmt.Println("service: Checking if userID owns sessionID")
 	owns, err := r.repo.VerifyOwnership(ctx, userID, sessionID)
 	if err != nil {
 		return nil, err
@@ -105,6 +106,7 @@ func (r *ChatService) SendMessage(ctx context.Context, userID uuid.UUID, session
 		return nil, chatDomain.ErrInternalServerError
 	}
 	// 2.1 prep user's message and summary for AI client
+	fmt.Println("service: Preparing user's message and summary for AI client")
 	userRecentMessages = append(userRecentMessages, userMessage)
 	summary, err := r.repo.GetSummary(ctx, sessionID)
 	if err != nil {
@@ -118,15 +120,17 @@ func (r *ChatService) SendMessage(ctx context.Context, userID uuid.UUID, session
 	r.repo.IncrementMessageCount(ctx, sessionID)
 
 	// 3. call AI client to generate AI response
-	response, err := r.aiClient.RespondToUserMessage(ctx, userRecentMessages, summary)
+
+	response, role, err := r.aiClient.RespondToUserMessage(ctx, userRecentMessages, summary)
 	if err != nil {
 		return nil, chatDomain.ErrInternalServerError
 	}
+	fmt.Println("service: AI response received from AI client: ", response)
 	aiMessage := chatDomain.Message{
 		ID: uuid.New(),
 		UserID: userID,
 		ChatSessionID: sessionID,
-		Role: "assistant",
+		Role: role,
 		Message: response,
 		CreatedAt: time.Now().UTC(),
 	}
@@ -183,17 +187,6 @@ func (r *ChatService) SummarizeConversation(ctx context.Context, userID uuid.UUI
 	summary, err := r.repo.GetSummary(ctx, sessionID)
 	if err != nil {
 		return nil, err
-	}
-
-	// 2. If no summary, create a new one
-	if summary == nil {
-		summary = &chatDomain.ConversationSummary{
-			ID: uuid.New(),
-			ChatSessionID: sessionID,
-			Content: "No summary found",
-			UpdatedAt: time.Now().UTC(),
-			LastMessageID: uuid.Nil,
-		}
 	}
 	var createdAt time.Time;
 
